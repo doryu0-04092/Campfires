@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  【役割】ブラウザが最初に読み込む HTML ファイル。
+  【なぜ必要か】React の画面を表示するための「入れ物」になる。
+  中身はほとんど空で、実際の画面は src/main.tsx が <div id="root"> の中に作る。
+-->
+<!-- lang="ja"：このページが日本語であることをブラウザや読み上げソフトに伝える -->
+<html lang="ja">
+  <head>
+    <!-- 文字化けを防ぐため、文字コードを UTF-8 に指定する -->
+    <meta charset="UTF-8" />
+    <!-- スマートフォンでも画面の幅に合わせて表示する -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- ブラウザのタブに表示される名前 -->
+    <title>Campfires</title>
+  </head>
+  <body>
+    <!-- React の画面がここに表示される -->
+    <div id="root"></div>
+    <!-- 画面の入り口となるプログラムを読み込む -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

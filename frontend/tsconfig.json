@@ -1,0 +1,13 @@
+// 【役割】TypeScript の設定の「まとめ役」。
+// 【なぜ必要か】画面のコード用（tsconfig.app.json）と、開発ツール用（tsconfig.node.json）で
+// 設定が違うため、2つの設定ファイルを束ねて TypeScript に伝える。
+// ※ tsconfig のファイルは、特別に「//」のコメントが書ける
+{
+  // このファイル自身は、直接チェックするファイルを持たない
+  "files": [],
+  // 実際の設定は、次の2つのファイルに書いてある
+  "references": [
+    { "path": "./tsconfig.app.json" },  // 画面のコード（src フォルダ）用
+    { "path": "./tsconfig.node.json" }  // 開発ツールの設定ファイル（vite.config.ts）用
+  ]
+}

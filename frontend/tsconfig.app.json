@@ -1,0 +1,46 @@
+// 【役割】画面のコード（src フォルダ）を TypeScript がチェックするときの設定。
+// 【なぜ必要か】どのくらい厳しくチェックするか、どの書き方を許すかを決めるため。
+{
+  "compilerOptions": {
+    // チェック結果を再利用して、2回目以降のチェックを速くするためのファイルの置き場所
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    // どの年のバージョンの JavaScript の書き方を使うか
+    "target": "es2023",
+    // 使える機能の一覧。DOM は、ブラウザの画面を操作する機能
+    "lib": ["ES2023", "DOM"],
+    // ファイル同士の読み込み（import）の方式
+    "module": "esnext",
+    // Vite が用意している型（画像の読み込みなど）を使えるようにする
+    "types": ["vite/client"],
+    // .css など、.ts 以外のファイルの読み込みを許す
+    "allowArbitraryExtensions": true,
+    // 外部パッケージの型のチェックを省いて、速くする
+    "skipLibCheck": true,
+
+    /* Bundler mode：Vite のようなツールでまとめる前提の設定 */
+    // import の探し方を、Vite に合わせる
+    "moduleResolution": "bundler",
+    // 「import App from './App.tsx'」のように、拡張子付きで書くことを許す
+    "allowImportingTsExtensions": true,
+    // 型だけを読み込むときは「import type」と書くように求める
+    "verbatimModuleSyntax": true,
+    // すべてのファイルを、独立した部品として扱う
+    "moduleDetection": "force",
+    // TypeScript はチェックだけ行い、ファイルは作らない（ファイル作成は Vite が行う）
+    "noEmit": true,
+    // React の JSX（HTML に似た書き方）を使えるようにする
+    "jsx": "react-jsx",
+
+    /* Linting：書き間違いを見つけるためのチェック */
+    // 使っていない変数があればエラーにする
+    "noUnusedLocals": true,
+    // 使っていない引数があればエラーにする
+    "noUnusedParameters": true,
+    // 型を取り除くだけで JavaScript になる書き方だけを許す
+    "erasableSyntaxOnly": true,
+    // switch 文で break の書き忘れがあればエラーにする
+    "noFallthroughCasesInSwitch": true
+  },
+  // チェックの対象は src フォルダ
+  "include": ["src"]
+}
