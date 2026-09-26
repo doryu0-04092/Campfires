@@ -1,0 +1,16 @@
+// 【役割】コードの書き方をチェックするツール（Oxlint）の設定。
+// 【なぜ必要か】バグにつながりやすい書き方を、実行する前に見つけるため。
+// 「npm run lint」で実行する。
+{
+  // 設定の書き方の定義。書き間違いをエディタが教えてくれるようになる
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // React、TypeScript 向けのチェックを有効にする
+  "plugins": ["react", "typescript", "oxc"],
+  "rules": {
+    // React の「フック」（use で始まる関数）の使い方の決まりを破ったらエラーにする
+    "react/rules-of-hooks": "error",
+    // 画面を書き換えたとき、ページ全体を再読み込みせずに反映する機能が
+    // うまく働かない書き方をしたら警告する
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
+}

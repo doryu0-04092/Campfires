@@ -1,0 +1,32 @@
+# 【役割】Git で管理しないファイルの一覧。
+# 【なぜ必要か】自動で作られるファイルや、PC ごとに違うファイルを GitHub に上げないため。
+# 「#」で始まる行はコメント。
+
+# ログ（実行中に出る記録）のファイル
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# npm install で入る外部パッケージ。package.json から何度でも作り直せるので管理しない
+node_modules
+# npm run build で作られる本番用ファイル。コードから何度でも作り直せるので管理しない
+dist
+dist-ssr
+# 「.local」が付くファイル。PC ごとの設定や、秘密の値を入れる場所なので GitHub に上げない
+*.local
+
+# エディタが作る設定ファイル
+.vscode/*
+# ただし、おすすめの拡張機能の一覧だけは共有する（「!」は「除外しない」の意味）
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

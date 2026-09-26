@@ -1,0 +1,30 @@
+// 【役割】開発ツールの設定ファイル（vite.config.ts）を TypeScript がチェックするときの設定。
+// 【なぜ必要か】vite.config.ts はブラウザではなく Node.js（PC 上）で動くため、画面のコードとは設定が違う。
+// 各項目の意味は tsconfig.app.json と同じなので、違う部分だけ説明する。
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "es2023",
+    // ブラウザの機能（DOM）は使わないので含めない
+    "lib": ["ES2023"],
+    // Node.js の機能の型を使えるようにする
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    // import の方式を Node.js に合わせる
+    "module": "nodenext",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  // チェックの対象は vite.config.ts だけ
+  "include": ["vite.config.ts"]
+}
