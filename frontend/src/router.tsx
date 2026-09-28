@@ -10,6 +10,7 @@ import { createBrowserRouter } from 'react-router'
 import Layout from './components/Layout'
 // 各画面。docs/screens.md のまとまり（利用者・管理・共通）ごとに並べている
 // 利用者の画面
+import EventListPage from './pages/EventListPage'
 import CommunityListPage from './pages/CommunityListPage'
 import CommunityDetailPage from './pages/CommunityDetailPage'
 import EventDetailPage from './pages/EventDetailPage'
@@ -44,7 +45,8 @@ export const router = createBrowserRouter([
     children: [
       // ---------- 利用者の画面 ----------
       // index: true は「親と同じ URL（/）のときに表示する画面」という意味
-      { index: true, Component: CommunityListPage },                                     // S-01
+      { index: true, Component: EventListPage },                                         // S-01
+      { path: 'communities', Component: CommunityListPage },                             // S-17
       { path: 'communities/:communityId', Component: CommunityDetailPage },              // S-05
       { path: 'communities/:communityId/events/:eventId', Component: EventDetailPage },  // S-09
       { path: 'account', Component: AccountSettingsPage },                               // S-12

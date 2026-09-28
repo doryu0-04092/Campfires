@@ -18,7 +18,7 @@ function NotFoundPage() {
       description="指定された URL の画面はありません。"
       // 動作確認のため、この画面から移動できる画面へのリンクを置く
       links={[
-        { to: '/', label: 'コミュニティ一覧へ戻る' },
+        { to: '/', label: 'トップへ戻る' },
       ]}
     />
   )

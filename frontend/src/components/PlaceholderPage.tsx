@@ -30,7 +30,7 @@ type PlaceholderPageProps = {
 function PlaceholderPage({ screenId, title, description, links = [] }: PlaceholderPageProps) {
   return (
     <section>
-      {/* 例：「S-01 コミュニティ一覧」 */}
+      {/* 例：「S-01 イベント一覧（トップ）」 */}
       <h1>
         {screenId} {title}
       </h1>

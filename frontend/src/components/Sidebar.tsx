@@ -37,8 +37,9 @@ type MenuGroup = {
 
 // 「ユーザー」のまとまり。番号がなくても開ける利用者の画面を並べる
 const userItems: MenuItem[] = [
-  { to: '/', label: 'コミュニティ一覧' },       // S-01
-  { to: '/account', label: 'アカウント設定' },  // S-12
+  { to: '/', label: 'イベント一覧' },                  // S-01
+  { to: '/communities', label: 'コミュニティ一覧' },   // S-17
+  { to: '/account', label: 'アカウント設定' },         // S-12
 ]
 
 // 「コミュニティ管理」のまとまり。番号がなくても開ける管理の画面を並べる

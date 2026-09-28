@@ -22,7 +22,7 @@ function Layout() {
     <div className={styles.page}>
       {/* 画面上部のメニュー（全画面共通） */}
       <header className={styles.header}>
-        {/* ロゴ：押すとコミュニティ一覧（S-01）に戻る */}
+        {/* ロゴ：押すとトップのイベント一覧（S-01）に戻る */}
         <Link to="/" className={styles.logo}>
           Campfires
         </Link>
