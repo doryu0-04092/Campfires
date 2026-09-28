@@ -19,7 +19,6 @@ function CommunityListPage() {
       // 動作確認のため、この画面から移動できる画面へのリンクを置く
       links={[
         { to: '/communities/1', label: 'コミュニティ詳細（例：1番）' },
-        { to: '/communities/new', label: 'コミュニティ作成' },
       ]}
     />
   )
