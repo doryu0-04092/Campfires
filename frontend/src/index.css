@@ -30,10 +30,3 @@ body {
 h1 {
   color: var(--accent);
 }
-
-/* 画面の本体：横幅を広げすぎず、中央に寄せる */
-main {
-  max-width: 960px;
-  margin: 0 auto;   /* 上下 0、左右は自動（＝中央寄せ） */
-  padding: 16px;
-}

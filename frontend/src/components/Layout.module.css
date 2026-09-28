@@ -1,0 +1,81 @@
+/*
+ * 【役割】画面の枠（Layout.tsx）専用の見た目。
+ * 【なぜ必要か】ファイル名に「.module」を付けると、ここで書いたクラス名がこの部品の中だけで効く。
+ * ほかの画面で同じクラス名を使っても、見た目がぶつからないようにするため（CSS Modules）。
+ */
+
+/* 画面全体：上から「メニュー → 中身 → 下部のリンク」の順に縦に並べる */
+.page {
+  display: flex;             /* 中の要素を並べる方式（フレックスボックス）を使う */
+  flex-direction: column;    /* 並べる向きを縦にする */
+  min-height: 100vh;         /* 中身が少なくても、画面の高さいっぱいまで広げる */
+}
+
+/* 画面上部のメニュー：ロゴを左、リンクを右に置く */
+.header {
+  display: flex;
+  justify-content: space-between;  /* 左右の端に振り分ける */
+  align-items: center;             /* 上下の位置を中央にそろえる */
+  flex-wrap: wrap;                 /* 画面が狭いときは折り返す（スマートフォン対策） */
+  gap: 8px;                        /* 要素どうしの間隔 */
+  padding: 12px 16px;              /* 内側の余白（上下 12px、左右 16px） */
+  border-bottom: 1px solid #e8dfd6;  /* 下に区切り線を引く */
+}
+
+/* ロゴ：大きめの太字にする */
+.logo {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--accent);      /* index.css で決めた強調色（炎のオレンジ） */
+  text-decoration: none;     /* リンクの下線を消す */
+}
+
+/* メニューのリンク：横に並べて、間を空ける */
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/*
+ * メニューの項目：リンクもボタンも、同じ「ボタン型」の見た目にする。
+ * タグは役割で使い分け（移動は Link、処理は button）、見た目はこのクラスでそろえる。
+ */
+.menuButton {
+  display: inline-block;       /* 余白や枠が効くようにする（リンクは最初、文字と同じ扱いのため） */
+  padding: 4px 12px;           /* 内側の余白（上下 4px、左右 12px） */
+  border: 1px solid #d6cbc1;   /* 枠線 */
+  border-radius: 6px;          /* 角を丸くする */
+  background: #fff;            /* 背景を白にする */
+  color: var(--text);          /* 文字色を本文と同じにする（リンクの青をやめる） */
+  font: inherit;               /* button の文字の種類と大きさを、周りと同じにする */
+  text-decoration: none;       /* リンクの下線を消す */
+  cursor: pointer;             /* マウスを乗せたとき、指の形にする */
+}
+
+/* 押せないボタン：薄くして、押せないことが分かるようにする */
+.menuButton:disabled {
+  opacity: 0.5;                /* 半分の濃さにする */
+  cursor: not-allowed;         /* マウスを乗せたとき、禁止の形にする */
+}
+
+/* 画面の中身：残りの高さをすべて使う（下部のリンクを画面の一番下に押し下げるため） */
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 960px;          /* 横に広がりすぎないようにする */
+  margin: 0 auto;            /* 左右中央に寄せる */
+  padding: 16px;
+  box-sizing: border-box;    /* 余白を含めて幅を計算する（はみ出し防止） */
+}
+
+/* 画面下部のリンク：中央に並べる */
+.footer {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border-top: 1px solid #e8dfd6;  /* 上に区切り線を引く */
+  font-size: 14px;
+}
