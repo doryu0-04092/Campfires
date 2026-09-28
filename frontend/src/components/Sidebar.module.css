@@ -1,0 +1,101 @@
+/*
+ * 【役割】左側のメニュー（Sidebar.tsx）専用の見た目。
+ * 【なぜ必要か】PC では左側に縦に並べ、スマートフォンでは画面上部に折りたたむため。
+ */
+
+/* メニュー全体：PC では左側に、決まった幅で置く */
+.sidebar {
+  width: 220px;                        /* メニューの幅 */
+  flex-shrink: 0;                      /* 画面が狭くなっても、メニューの幅を縮めない */
+  padding: 16px;
+  border-right: 1px solid #e8dfd6;     /* 右に区切り線を引く */
+  box-sizing: border-box;
+}
+
+/* 「メニュー」ボタン：PC では使わないので隠す */
+.toggle {
+  display: none;
+}
+
+/* まとまりどうしの間を空ける */
+.group + .group {
+  margin-top: 24px;
+}
+
+/* まとまりの見出し（「ユーザー」「コミュニティ管理」） */
+.groupTitle {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* 見出しの下の説明（誰向けのメニューか）：小さく、少し薄い文字にする */
+.groupDescription {
+  margin: 2px 0 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 項目の一覧：先頭の「・」と余白を消す */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 各項目のリンク：押しやすいように、行全体を押せる範囲にする */
+.link {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* マウスを乗せたとき、背景に薄い色を付ける */
+.link:hover {
+  background: #f3ebe3;
+}
+
+/* 今開いている画面のリンク：強調色で目立たせる */
+.active {
+  background: #fbe3d6;
+  color: var(--accent);
+  font-weight: bold;
+}
+
+/*
+ * 画面の幅が 768px 以下のとき（スマートフォンや小さいタブレット）の見た目。
+ * @media の中に書いたものは、条件に合うときだけ効く
+ */
+@media (max-width: 768px) {
+  /* メニューを左側ではなく、画面上部に横幅いっぱいで置く */
+  .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #e8dfd6;  /* 下に区切り線を引く */
+  }
+
+  /* 「メニュー」ボタンを表示する */
+  .toggle {
+    display: block;
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #d6cbc1;
+    border-radius: 6px;
+    background: #fff;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  /* メニューの本体は、最初は隠しておく */
+  .menu {
+    display: none;
+    margin-top: 12px;
+  }
+
+  /* ボタンで開いたときだけ表示する */
+  .open {
+    display: block;
+  }
+}

@@ -23,10 +23,11 @@ function EventDetailPage() {
       title="イベント詳細"
       // `` で囲んだ文字の中の ${ } には、変数の値が入る
       description={`イベントの内容と残りの枠数を表示する。申込みとキャンセルもここで行う。（表示中：コミュニティ ${communityId}、イベント ${eventId}）`}
-      // 動作確認のため、この画面から移動できる画面へのリンクを置く
+      // 動作確認のため、この画面から移動できる画面へのリンクを置く。
+      // 管理の画面へのリンクは、本来はオーナーと運営スタッフにだけ表示する
       links={[
-        { to: `/communities/${communityId}/events/${eventId}/edit`, label: 'イベント編集' },
-        { to: `/communities/${communityId}/events/${eventId}/applicants`, label: '申込者一覧' },
+        { to: `/manage/communities/${communityId}/events/${eventId}/edit`, label: 'イベント編集（管理）' },
+        { to: `/manage/communities/${communityId}/events/${eventId}/applicants`, label: '申込者一覧（管理）' },
       ]}
     />
   )

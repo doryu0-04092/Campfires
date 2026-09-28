@@ -1,5 +1,5 @@
 /**
- * 【役割】S-06「コミュニティ編集」の画面。URL は /communities/:communityId/edit
+ * 【役割】S-06「コミュニティ編集」の画面。URL は /manage/communities/:communityId/edit
  * 【なぜ必要か】docs/screens.md で決めた画面の1つ。
  * 今は仮の表示だけを置いている。中身は、画面を1つずつ作るときに書く。
  */
@@ -14,7 +14,7 @@ import PlaceholderPage from '../components/PlaceholderPage'
  */
 function CommunityEditPage() {
   // URL から communityId を取り出す。
-  // 例：/communities/3/edit なら、communityId は "3"
+  // 例：/manage/communities/3/edit なら、communityId は "3"
   const { communityId } = useParams()
 
   return (

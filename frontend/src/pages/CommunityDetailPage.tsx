@@ -23,11 +23,12 @@ function CommunityDetailPage() {
       title="コミュニティ詳細"
       // `` で囲んだ文字の中の ${ } には、変数の値が入る
       description={`コミュニティの情報とイベントの一覧を表示する。参加の申請や退会もここで行う。（表示中：コミュニティ ${communityId}）`}
-      // 動作確認のため、この画面から移動できる画面へのリンクを置く
+      // 動作確認のため、この画面から移動できる画面へのリンクを置く。
+      // 管理の画面へのリンクは、本来はオーナーと運営スタッフにだけ表示する
       links={[
-        { to: `/communities/${communityId}/edit`, label: 'コミュニティ編集' },
-        { to: `/communities/${communityId}/members`, label: 'メンバー管理' },
-        { to: `/communities/${communityId}/events/new`, label: 'イベント作成' },
+        { to: `/manage/communities/${communityId}/edit`, label: 'コミュニティ編集（管理）' },
+        { to: `/manage/communities/${communityId}/members`, label: 'メンバー管理（管理）' },
+        { to: `/manage/communities/${communityId}/events/new`, label: 'イベント作成（管理）' },
         { to: `/communities/${communityId}/events/1`, label: 'イベント詳細（例：1番）' },
       ]}
     />
