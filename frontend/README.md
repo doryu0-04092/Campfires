@@ -35,6 +35,10 @@ Campfires の画面です。React と TypeScript で作り、開発ツールに 
 | `src/components/〜.tsx` | ◎ | 複数の画面で使い回す部品（画面の枠 `Layout` など） | 使っているすべての画面に影響するので、変更の影響範囲 |
 | `src/components/〜.module.css` | △ | 部品ごとの見た目（CSS Modules） | 見た目だけなので、ブラウザで表示を確認すれば十分 |
 | `src/router.tsx` | ◎ | URL と画面の対応表 | `docs/screens.md` の URL と一致しているか |
+| `src/api/〜.ts` | ◎ | API を呼び出す関数 | 呼び出す URL と送る値が、API の仕様と一致しているか。ログイン情報を `localStorage` に保存していないか |
+| `src/types/〜.ts` | ◎ | 画面と API の間でやり取りするデータの形（型） | API の仕様と一致しているか。ここを変えると、使っているすべての画面に影響する |
+| `src/utils/〜.ts` | ○ | 複数の画面で使い回す、画面を持たない関数（日時の表示など） | 使っているすべての画面に影響するので、変更の影響範囲 |
+| `src/mocks/〜.ts` | ○ | 偽の API（MSW）と偽のデータ。開発中だけ使い、本番用のファイルには含まれない | 偽の API の返事の形が、`src/types` や API の仕様と一致しているか。要件定義書のルール（検索の並び順など）どおりに動くか |
 | `src/main.tsx` | ○ | 画面全体の入り口 | 基本的に変わらない。変わったときは、アプリ全体に効く仕組み（ログイン状態の管理など）が追加されたということなので、何を足したのかを確認する |
 | `src/index.css` | ○ | アプリ全体に共通する見た目 | 全画面に影響するので、意図しない画面まで見た目が変わらないか。実際にブラウザで確認するのが確実 |
 | `index.html` | ○ | ブラウザが最初に読み込む HTML | **外部のスクリプト（`<script src="https://...">`）が追加されていないか**。追加されていたら、信頼できるものか必ず確認する |
@@ -56,6 +60,7 @@ Campfires の画面です。React と TypeScript で作り、開発ツールに 
 | `package-lock.json` | △ | インストールしたパッケージの正確なバージョンの記録 | 中身は読まない。`package.json` を変えたときに、一緒に変わっているかだけを見る。`package.json` が変わっていないのにこれだけ変わっていたら、理由を確認する |
 | `node_modules` | × | インストールしたパッケージの本体 | 中身は見ない。コミットに混ざっていないこと、`npm install` の結果が「found 0 vulnerabilities」であることを確認する |
 | `dist` | × | `npm run build` で作られる本番用のファイル | 中身は見ない。`npm run build` がエラーなしで終わることを確認する |
+| `public/mockServiceWorker.js` | △ | MSW が偽の API を動かすために使うファイル。`npx msw init public` で作られる。**編集しない** | 中身は読まない。MSW を更新したときに一緒に変わっているかだけを見る。`public` の中身はそのまま `dist` にもコピーされるが、本番では動かし始めないので使われない |
 
 ## package.json の説明
 
@@ -85,7 +90,14 @@ Campfires の画面です。React と TypeScript で作り、開発ツールに 
 | `vite` | 開発用サーバーと、本番用ファイルの作成 |
 | `@vitejs/plugin-react` | Vite で React を使えるようにする |
 | `typescript` | TypeScript のチェック |
+| `msw` | 偽の API。バックエンドがなくても画面を動かせるようにする |
 | `@types/react`、`@types/react-dom`、`@types/node` | React と Node.js の型の情報 |
 | `oxlint` | 書き方のチェック |
+
+### msw（MSW の設定）
+
+| 項目 | 意味 |
+|---|---|
+| `workerDirectory` | MSW のファイル（`mockServiceWorker.js`）を置いたフォルダ。MSW を更新したとき、このフォルダのファイルも自動で新しくしてくれる |
 
 パッケージを追加したときは、この表にも追加します。

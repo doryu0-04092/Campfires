@@ -1,0 +1,49 @@
+/*
+ * 【役割】イベント1件分の表示（EventCard.tsx）専用の見た目。
+ */
+
+/* カード全体：枠線で囲む */
+.card {
+  padding: 12px 16px;
+  border: 1px solid #e8dfd6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* タイトル */
+.title {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* コミュニティの名前：小さく、少し薄い文字にする */
+.community {
+  margin: 4px 0 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* 「開催日時」「残りの枠」の項目：項目名と値を横に並べる（2列の表のような形） */
+.details {
+  display: grid;
+  grid-template-columns: auto 1fr;  /* 1列目は項目名の幅、2列目は残りすべて */
+  gap: 2px 12px;                    /* 行の間 2px、列の間 12px */
+  margin: 0;
+  font-size: 14px;
+}
+
+/* 項目名：少し薄い文字にする */
+.details dt {
+  color: var(--text-muted);
+}
+
+/* 値：ブラウザが最初に付けている左の余白を消す */
+.details dd {
+  margin: 0;
+}
+
+/* 満席：目立つ色にする */
+.full {
+  color: #c92a2a;
+  font-weight: bold;
+}

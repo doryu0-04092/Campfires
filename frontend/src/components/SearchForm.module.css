@@ -1,0 +1,43 @@
+/*
+ * 【役割】検索欄（SearchForm.tsx）専用の見た目。
+ */
+
+/* 入力欄とボタンを横に並べる */
+.form {
+  display: flex;
+  gap: 8px;
+}
+
+/* 入力欄：残りの幅をすべて使う */
+.input {
+  flex: 1;
+  min-width: 0;               /* 画面が狭くても、横にはみ出さないようにする */
+  padding: 8px 12px;
+  border: 1px solid #d6cbc1;
+  border-radius: 6px;
+  font: inherit;              /* 文字の種類と大きさを、周りと同じにする */
+}
+
+/* 検索ボタン：強調色で目立たせる */
+.button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+/*
+ * 見た目では隠すが、読み上げソフトには読ませるための指定。
+ * display: none にすると読み上げソフトにも読まれなくなるので、代わりに 1px の大きさに縮めて隠す
+ */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
