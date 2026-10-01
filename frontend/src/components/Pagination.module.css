@@ -1,0 +1,38 @@
+/*
+ * 【役割】ページの切り替え（Pagination.tsx）専用の見た目。
+ */
+
+/* 「前へ」、ページ番号、「次へ」を横に並べる。狭い画面では折り返す */
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 24px;
+}
+
+/* 1つ1つのボタン：同じ大きさの四角にそろえる */
+.item {
+  min-width: 36px;
+  padding: 6px 10px;
+  border: 1px solid #d6cbc1;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+/* 今のページ：強調色で目立たせる */
+.current {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: bold;
+}
+
+/* 押せないボタン（1ページ目の「前へ」など）：薄くする */
+.disabled {
+  opacity: 0.4;
+}

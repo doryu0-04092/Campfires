@@ -7,7 +7,8 @@
 
 // Link：ページ全体を読み込み直さずに、別の画面へ移動するためのリンク
 // Outlet：URL に合った画面の中身を、ここに差し込むための目印
-import { Link, Outlet } from 'react-router'
+// ScrollRestoration：画面を移動したとき、スクロールの位置を一番上に戻す（「戻る」のときは元の位置に戻す）
+import { Link, Outlet, ScrollRestoration } from 'react-router'
 // 左側のメニュー（ユーザー・コミュニティ管理）
 import Sidebar from './Sidebar'
 // この部品専用の CSS を読み込む。styles.header のように、クラス名を取り出して使う
@@ -53,6 +54,9 @@ function Layout() {
         <Link to="/privacy">プライバシーポリシー</Link>
         <Link to="/terms">利用規約</Link>
       </footer>
+
+      {/* スクロールの位置の管理。画面には何も表示されない */}
+      <ScrollRestoration />
     </div>
   )
 }
