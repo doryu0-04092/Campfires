@@ -1,0 +1,215 @@
+# 【役割】Campfires の API 仕様書の本体（OpenAPI 3.1 の形式）。
+# 【なぜ必要か】画面（React）とバックエンド（Spring Boot）の間の約束事を、1か所で決めておくため。
+# 偽の API（MSW）も、本物の API も、このファイルのとおりに作る。
+# 読み方と共通ルールは、同じフォルダの README.md に書いている。
+
+# OpenAPI のどのバージョンの書き方で書いているか
+openapi: 3.1.0
+
+# この API の名前と説明（ツールの画面の一番上に表示される）
+info:
+  title: Campfires API
+  version: 0.1.0
+  description: |
+    勉強会・コミュニティ運営のためのイベント申込み管理アプリ「Campfires」の API です。
+    共通ルール（URL の付け方、エラーの返し方、ログインの扱いなど）は docs/api/README.md を参照してください。
+
+# API の置き場所。開発中は、画面と同じ場所（Vite の開発用サーバー）から呼ぶ
+servers:
+  - url: http://localhost:5173
+    description: 開発用（画面と同じ場所。偽の API が返事をする）
+
+# API のまとまり。各 API に、どのまとまりかを付ける。ツールの画面では、まとまりごとに並ぶ
+tags:
+  - name: auth
+    description: アカウント登録、ログイン、ログアウト
+  - name: account
+    description: 自分のアカウント（アカウント設定、ニックネームの変更、アカウント削除）
+  - name: communities
+    description: コミュニティ（一覧、詳細、作成、編集、削除）
+  - name: members
+    description: コミュニティのメンバー（参加申請、承認・却下、退会、運営スタッフの任命、除名）
+  - name: events
+    description: イベント（一覧・検索、詳細、作成、編集、削除）
+  - name: applications
+    description: イベントへの申込み（申込み、キャンセル、申込者一覧）
+  - name: notifications
+    description: お知らせ
+
+# ★ API の一覧。分野ごとに、次の段階から追加していく
+paths: {}
+
+# 何度も使う部品。各 API からは $ref で参照する
+components:
+
+  # ---------- ログインと CSRF の方式 ----------
+  securitySchemes:
+    sessionCookie:
+      # ログインの証明（セッション ID）を、Cookie で送る方式
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: |
+        ログインに成功すると、サーバーがセッション ID を Cookie で渡します。
+        Cookie には HttpOnly、Secure、SameSite=Lax を付けます。画面のプログラムからは読めません。
+        30分間操作がなければ、ログアウトになります。
+    csrfToken:
+      # CSRF の対策の合言葉を、ヘッダーで送る方式
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+      description: |
+        データを変える API（POST、PATCH、DELETE）で必要です。
+        サーバーが XSRF-TOKEN という Cookie で渡した値を、このヘッダーに入れて送ります。
+        一致しないときは 403 を返します。
+
+  # ---------- URL に入れる値 ----------
+  parameters:
+    Page:
+      name: page
+      in: query          # query：URL の「?」より後ろに付ける値（例：?page=2）
+      required: false
+      description: ページ番号。1から始まる。付けなければ1ページ目。
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    CommunityId:
+      name: communityId
+      in: path           # path：URL の途中に入れる値（例：/api/communities/3 の 3）
+      required: true
+      description: コミュニティの番号
+      schema:
+        type: integer
+        minimum: 1
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      description: イベントの番号
+      schema:
+        type: integer
+        minimum: 1
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: ユーザーの番号
+      schema:
+        type: integer
+        minimum: 1
+
+  # ---------- データの形 ----------
+  schemas:
+
+    Problem:
+      type: object
+      description: |
+        エラーのときに返す形（RFC 9457 Problem Details）。すべての API で同じ形にする。
+        画面は code を見て表示を変える。detail の文章は変わることがあるので、文章では判断しない。
+      required: [type, title, status, detail, code]
+      properties:
+        type:
+          type: string
+          description: エラーの種類を表す URI。このアプリでは使わないので、いつも "about:blank"
+          example: about:blank
+        title:
+          type: string
+          description: HTTP ステータスコードの短い説明（英語）
+          example: Conflict
+        status:
+          type: integer
+          description: HTTP ステータスコード
+          example: 409
+        detail:
+          type: string
+          description: 利用者に見せてよい、日本語の説明。プログラムの内部の情報は入れない
+          example: このイベントは満席です。
+        code:
+          type: string
+          description: エラーの種類を表す決まった記号。どの記号を返すかは、各 API の説明に書く
+          example: EVENT_FULL
+
+    ValidationProblem:
+      description: 入力のチェックで引っかかったとき（400）に返す形。Problem に errors を足したもの
+      # allOf：「Problem の項目すべて」と「下に書いた項目」を合わせた形、という意味
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: array
+              description: 引っかかった項目の一覧
+              items:
+                $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      description: 入力のチェックで引っかかった項目1つ分
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          description: 引っかかった項目の名前（送ったデータの項目の名前と同じ）
+          example: title
+        message:
+          type: string
+          description: 利用者に見せる、日本語の説明
+          example: タイトルを入力してください。
+
+    PageInfo:
+      type: object
+      description: 一覧を返す API で、ページの切り替えに使う情報。一覧の返事は、この項目と items を持つ
+      required: [totalCount, page, pageSize, totalPages]
+      properties:
+        totalCount:
+          type: integer
+          description: 全部の件数
+          example: 42
+        page:
+          type: integer
+          description: 今のページ番号（1から始まる）
+          example: 1
+        pageSize:
+          type: integer
+          description: 1ページの件数（30）
+          example: 30
+        totalPages:
+          type: integer
+          description: 全部で何ページあるか
+          example: 2
+
+  # ---------- よく使う、エラーの返事 ----------
+  # 各 API の responses から $ref で参照する。返す code は API ごとに説明に書く
+  responses:
+    BadRequest:
+      description: 入力が正しくない（code は VALIDATION_ERROR）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblem'
+    Unauthorized:
+      description: ログインしていない（code は UNAUTHENTICATED）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: 権限がない、または CSRF トークンが正しくない（code は FORBIDDEN または CSRF_TOKEN_INVALID）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: 見つからない（code は NOT_FOUND）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: 今の状態ではできない（code は API ごとの説明を参照）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
