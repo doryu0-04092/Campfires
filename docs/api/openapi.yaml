@@ -215,7 +215,8 @@ paths:
         返す code
         - VALIDATION_ERROR（400）：パスワードが空
         - INVALID_PASSWORD（400）：パスワードが違う。errors に password の項目を入れて返す
-        - OWNS_COMMUNITIES（409）：オーナーをしているコミュニティがある。先にコミュニティを削除する必要がある
+        - OWNS_ACTIVE_COMMUNITIES（409）：アーカイブしていない、オーナーをしているコミュニティがある
+        - OWNED_COMMUNITY_HAS_UPCOMING_EVENTS（409）：オーナーをしているコミュニティに、開催前のイベントが残っている
       tags: [account]
       security:
         - sessionCookie: []
@@ -235,6 +236,469 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/me/managed-communities:
+    get:
+      operationId: listManagedCommunities
+      summary: 管理しているコミュニティの一覧を取得する（S-16）
+      description: |
+        自分がオーナーか運営スタッフをしているコミュニティの一覧を、作成日時の新しい順に返します。
+        アーカイブ済みのコミュニティも含めます（オーナーが元に戻せるように）。
+        自分の立場（オーナーか運営スタッフか）も返します。
+      tags: [account]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedCommunityListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==================== コミュニティ（communities） ====================
+
+  /api/communities:
+    get:
+      operationId: listCommunities
+      summary: コミュニティの一覧を取得する（F-04、S-17）
+      description: |
+        コミュニティを、作成日時の新しい順に返します。ログインしていなくても呼べます。
+        アーカイブ済みのコミュニティは含めません（要件定義書 5.9）。
+      tags: [communities]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    post:
+      operationId: createCommunity
+      summary: コミュニティを作成する（F-03、S-04）
+      description: |
+        コミュニティを作ります。作った人がオーナーになります。
+      tags: [communities]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommunityInput'
+      responses:
+        '201':
+          description: 作成した。作ったコミュニティを返す
+          headers:
+            Location:
+              description: 作ったコミュニティの API の URL（例：/api/communities/3）
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/communities/{communityId}:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    get:
+      operationId: getCommunity
+      summary: コミュニティの詳細を取得する（F-04、S-05）
+      description: |
+        コミュニティの情報を返します。ログインしていなくても呼べます。
+        アーカイブ済みのコミュニティも返します（archivedAt に日時が入る）。
+        ログインしている場合は、そのコミュニティでの自分の立場と、参加申請の状況も返します。
+        コミュニティのイベントの一覧は、別の API（GET /api/communities/{communityId}/events）で取得します。
+      tags: [communities]
+      security:
+        - {}               # {} は「ログインしていなくてもよい」という意味
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      operationId: updateCommunity
+      summary: コミュニティを編集する（F-05、S-06）
+      description: |
+        コミュニティの名前と説明を変えます。オーナーだけができます。
+        アーカイブ中は編集できません（元に戻してから編集する。要件定義書 5.9）。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+        - COMMUNITY_ARCHIVED（409）：アーカイブ中
+      tags: [communities]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommunityInput'
+      responses:
+        '200':
+          description: 変更した。変更後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    # コミュニティは削除せず、アーカイブにする（要件定義書 5.9）。
+    # 「アーカイブされている状態」を1つのものとみなし、PUT で作る（アーカイブする）、DELETE で消す（元に戻す）と表す
+    put:
+      operationId: archiveCommunity
+      summary: コミュニティをアーカイブする（F-05、S-06）
+      description: |
+        コミュニティをアーカイブします。オーナーだけができます。コミュニティを完全に消すことはしません。
+        要件定義書 5.9 のとおりに扱います。
+        - コミュニティ一覧から外れる（詳細は見られる）
+        - 開催前のイベントは、そのまま開催される（申込み、キャンセル、編集、申込者一覧は今までどおり）
+        - 新しいイベントの作成と、参加の申請はできなくなる
+        - 申請中だった参加申請は、すべて却下にする
+
+        すでにアーカイブ中のときに呼んでも、成功（200）を返します。
+        PUT は「この状態にする」という意味なので、何度呼んでも結果が同じになるようにしている。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+      tags: [communities]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: アーカイブした。アーカイブ後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: unarchiveCommunity
+      summary: アーカイブしたコミュニティを元に戻す（F-05、S-06、S-16）
+      description: |
+        アーカイブを解除して、元の状態に戻します。オーナーだけができます。
+        アーカイブしたときに却下した参加申請は、元に戻りません。
+        アーカイブ中でないときに呼んでも、成功（200）を返します。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+      tags: [communities]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: 元に戻した。元に戻した後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== コミュニティのメンバー（members） ====================
+
+  /api/communities/{communityId}/join-requests:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    get:
+      operationId: listJoinRequests
+      summary: 参加申請の一覧を取得する（F-07、S-07）
+      description: |
+        「申請中」の参加申請を、申請した日時の古い順に返します（先に申請した人から判断できるように）。
+        オーナーと運営スタッフだけができます。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+      tags: [members]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinRequestListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      operationId: createJoinRequest
+      summary: コミュニティへの参加を申請する（F-06、S-05）
+      description: |
+        自分を、このコミュニティに参加させてほしいと申請します。申請の状態は「申請中」から始まります。
+        却下された人、退会した人、除名された人も、もう一度申請できます（要件定義書 5.1、5.4）。
+
+        返す code
+        - ALREADY_MEMBER（409）：すでにメンバー（オーナー、運営スタッフを含む）
+        - JOIN_REQUEST_PENDING（409）：すでに申請中
+        - COMMUNITY_ARCHIVED（409）：アーカイブ中のコミュニティには申請できない
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '201':
+          description: 申請した
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/join-requests/{joinRequestId}:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/JoinRequestId'
+
+    patch:
+      operationId: decideJoinRequest
+      summary: 参加申請を承認・却下する（F-07、S-07）
+      description: |
+        申請中の参加申請を、承認または却下します。オーナーと運営スタッフだけができます。
+        承認すると、申請した人はメンバーになります。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+        - JOIN_REQUEST_ALREADY_DECIDED（409）：すでに承認・却下されている（ほかの運営スタッフが先に処理した場合、
+          コミュニティがアーカイブされて自動で却下された場合など）
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideJoinRequestRequest'
+      responses:
+        '200':
+          description: 承認・却下した。処理後の申請を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/members:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    get:
+      operationId: listMembers
+      summary: メンバーの一覧を取得する（S-07）
+      description: |
+        コミュニティのメンバー（オーナー、運営スタッフを含む）を、立場の順（オーナー → 運営スタッフ → メンバー）、
+        同じ立場なら参加した日時の古い順に返します。
+        オーナーと運営スタッフだけができます。返す名前はニックネームだけです（README 1.9）。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+      tags: [members]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/communities/{communityId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/UserId'
+
+    patch:
+      operationId: updateMemberRole
+      summary: 運営スタッフに任命・解除する（F-09、S-07）
+      description: |
+        メンバーを運営スタッフにする（role に staff を送る）、または運営スタッフをメンバーに戻します（member を送る）。
+        オーナーだけができます。オーナー自身の立場は変えられません。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+        - CANNOT_CHANGE_OWNER（409）：オーナーの立場を変えようとした
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRoleRequest'
+      responses:
+        '200':
+          description: 変更した。変更後のメンバーの情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      operationId: removeMember
+      summary: メンバーを除名する（F-19、S-07）
+      description: |
+        メンバーまたは運営スタッフを、コミュニティから外します。オーナーだけができます。
+        除名された人の、開催前のイベントへの申込み（キャンセル待ちを含む）は、すべてキャンセルされます（要件定義書 5.4.1）。
+        締め切り前のイベントでは、キャンセル待ちの繰り上げも起きます。
+        画面は、除名する前に必ず確認の画面を出します（この API を呼ぶ前の画面側の決まり）。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+        - CANNOT_REMOVE_OWNER（409）：オーナーを除名しようとした
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: 除名した
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/membership:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    delete:
+      operationId: leaveCommunity
+      summary: コミュニティを退会する（F-08、S-05）
+      description: |
+        自分が、このコミュニティから抜けます。メンバーと運営スタッフができます。オーナーは退会できません（要件定義書 5.1）。
+        開催前のイベントへの申込み（キャンセル待ちを含む）は、すべてキャンセルされます（要件定義書 5.4）。
+        締め切り前のイベントでは、キャンセル待ちの繰り上げも起きます。
+
+        URL を /members/{userId} ではなく /membership（自分の参加）にしているのは、
+        他人を外す操作（除名）と、自分が抜ける操作を、URL の段階で分けるため。
+
+        返す code
+        - NOT_MEMBER（409）：メンバーではない
+        - OWNER_CANNOT_LEAVE（409）：オーナーは退会できない
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: 退会した
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
 
@@ -294,6 +758,14 @@ components:
       in: path
       required: true
       description: ユーザーの番号
+      schema:
+        type: integer
+        minimum: 1
+    JoinRequestId:
+      name: joinRequestId
+      in: path
+      required: true
+      description: 参加申請の番号
       schema:
         type: integer
         minimum: 1
@@ -466,6 +938,257 @@ components:
         パスワードの保存に使う BCrypt は先頭の 72バイトしか使わないため、
         1文字が1バイトになる半角の文字に限っている。
       example: campfire2026
+
+    # ---------- ほかのユーザー ----------
+
+    UserRef:
+      type: object
+      description: |
+        ほかのユーザーを表すときの形。ニックネームだけを返し、本名とメールアドレスは返さない（README 1.9）。
+      required: [userId, nickname]
+      properties:
+        userId:
+          type: integer
+          description: ユーザーの番号
+          example: 12
+        nickname:
+          # ['string', 'null'] は「文字、または null（空）」という意味
+          type: ['string', 'null']
+          description: ニックネーム。アカウントを削除した人は null（画面で「退会したユーザー」と表示する）
+          example: たろう
+
+    # ---------- コミュニティ ----------
+
+    CommunityRole:
+      type: string
+      description: |
+        コミュニティの中での立場。
+        - owner：オーナー
+        - staff：運営スタッフ
+        - member：メンバー
+      enum: [owner, staff, member]
+      example: member
+
+    ArchivedAt:
+      type: ['string', 'null']
+      format: date-time
+      description: |
+        コミュニティをアーカイブした日時（世界標準時）。アーカイブしていなければ null。
+        画面は、null でなければ「アーカイブ済み」と表示する（要件定義書 5.9）
+      example: null
+
+    CommunityInput:
+      type: object
+      description: コミュニティを作成・編集するときに送るデータ
+      required: [name, description]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: コミュニティの名前。1〜50文字
+          example: Java 勉強会 東京
+        description:
+          type: string
+          maxLength: 2000
+          description: コミュニティの説明。2000文字まで（空でもよい）
+          example: Java を学ぶ人のための勉強会です。初心者も歓迎します。
+
+    CommunitySummary:
+      type: object
+      description: コミュニティの一覧に表示する、1件分の情報
+      required: [id, name, description, memberCount, createdAt]
+      properties:
+        id:
+          type: integer
+          description: コミュニティの番号
+          example: 3
+        name:
+          type: string
+          description: コミュニティの名前
+          example: Java 勉強会 東京
+        description:
+          type: string
+          description: コミュニティの説明
+          example: Java を学ぶ人のための勉強会です。初心者も歓迎します。
+        memberCount:
+          type: integer
+          description: メンバーの人数（オーナー、運営スタッフを含む）
+          example: 24
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成した日時（世界標準時）
+          example: '2026-09-20T03:00:00Z'
+
+    CommunityListResponse:
+      description: コミュニティの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CommunitySummary'
+
+    CommunityDetail:
+      description: コミュニティの詳細。一覧の情報に、オーナーと、自分との関係を足したもの
+      allOf:
+        - $ref: '#/components/schemas/CommunitySummary'
+        - type: object
+          required: [owner, archivedAt, myRole, myJoinRequestStatus]
+          properties:
+            owner:
+              $ref: '#/components/schemas/UserRef'
+            archivedAt:
+              $ref: '#/components/schemas/ArchivedAt'
+            myRole:
+              description: |
+                このコミュニティでの自分の立場。メンバーでない、またはログインしていないときは null。
+                画面は、これを見てボタン（参加を申請する、退会する、管理画面へ移動）を出し分ける
+              oneOf:
+                - $ref: '#/components/schemas/CommunityRole'
+                - type: 'null'
+            myJoinRequestStatus:
+              description: |
+                自分の参加申請の状態。申請していない、ログインしていない、またはすでにメンバーのときは null
+              oneOf:
+                - $ref: '#/components/schemas/JoinRequestStatus'
+                - type: 'null'
+
+    ManagedCommunity:
+      type: object
+      description: 管理しているコミュニティの一覧に表示する、1件分の情報
+      required: [id, name, memberCount, archivedAt, myRole, pendingJoinRequestCount]
+      properties:
+        archivedAt:
+          $ref: '#/components/schemas/ArchivedAt'
+        id:
+          type: integer
+          description: コミュニティの番号
+          example: 3
+        name:
+          type: string
+          description: コミュニティの名前
+          example: Java 勉強会 東京
+        memberCount:
+          type: integer
+          description: メンバーの人数
+          example: 24
+        myRole:
+          description: 自分の立場（owner か staff）
+          allOf:
+            - $ref: '#/components/schemas/CommunityRole'
+        pendingJoinRequestCount:
+          type: integer
+          description: 申請中の参加申請の件数（承認・却下を待っている人数）
+          example: 2
+
+    ManagedCommunityListResponse:
+      description: 管理しているコミュニティの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ManagedCommunity'
+
+    # ---------- コミュニティのメンバー ----------
+
+    JoinRequestStatus:
+      type: string
+      description: |
+        参加申請の状態（要件定義書 5.1）。
+        - pending：申請中
+        - approved：承認済み
+        - rejected：却下
+      enum: [pending, approved, rejected]
+      example: pending
+
+    JoinRequest:
+      type: object
+      description: 参加申請1件分の情報
+      required: [id, user, status, requestedAt]
+      properties:
+        id:
+          type: integer
+          description: 参加申請の番号
+          example: 41
+        user:
+          $ref: '#/components/schemas/UserRef'
+        status:
+          $ref: '#/components/schemas/JoinRequestStatus'
+        requestedAt:
+          type: string
+          format: date-time
+          description: 申請した日時（世界標準時）
+          example: '2026-10-05T12:00:00Z'
+
+    JoinRequestListResponse:
+      description: 参加申請の一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/JoinRequest'
+
+    DecideJoinRequestRequest:
+      type: object
+      description: 参加申請を承認・却下するときに送るデータ
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: approved（承認）か rejected（却下）
+          enum: [approved, rejected]
+          example: approved
+
+    Member:
+      type: object
+      description: メンバー1人分の情報
+      required: [user, role, joinedAt]
+      properties:
+        user:
+          $ref: '#/components/schemas/UserRef'
+        role:
+          $ref: '#/components/schemas/CommunityRole'
+        joinedAt:
+          type: string
+          format: date-time
+          description: メンバーになった日時（世界標準時）
+          example: '2026-09-25T08:30:00Z'
+
+    MemberListResponse:
+      description: メンバーの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Member'
+
+    UpdateMemberRoleRequest:
+      type: object
+      description: 運営スタッフに任命・解除するときに送るデータ
+      required: [role]
+      properties:
+        role:
+          type: string
+          description: staff（運営スタッフにする）か member（メンバーに戻す）。owner は送れない
+          enum: [staff, member]
+          example: staff
 
     # ---------- 一覧 ----------
 
