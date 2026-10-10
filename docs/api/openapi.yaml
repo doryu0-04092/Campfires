@@ -1,0 +1,1996 @@
+# 【役割】Campfires の API 仕様書の本体（OpenAPI 3.1 の形式）。
+# 【なぜ必要か】画面（React）とバックエンド（Spring Boot）の間の約束事を、1か所で決めておくため。
+# 偽の API（MSW）も、本物の API も、このファイルのとおりに作る。
+# 読み方と共通ルールは、同じフォルダの README.md に書いている。
+
+# OpenAPI のどのバージョンの書き方で書いているか
+openapi: 3.1.0
+
+# この API の名前と説明（ツールの画面の一番上に表示される）
+info:
+  title: Campfires API
+  version: 0.1.0
+  description: |
+    勉強会・コミュニティ運営のためのイベント申込み管理アプリ「Campfires」の API です。
+    共通ルール（URL の付け方、エラーの返し方、ログインの扱いなど）は docs/api/README.md を参照してください。
+
+# API の置き場所。開発中は、画面と同じ場所（Vite の開発用サーバー）から呼ぶ
+servers:
+  - url: http://localhost:5173
+    description: 開発用（画面と同じ場所。偽の API が返事をする）
+
+# API のまとまり。各 API に、どのまとまりかを付ける。ツールの画面では、まとまりごとに並ぶ
+tags:
+  - name: auth
+    description: アカウント登録、ログイン、ログアウト
+  - name: account
+    description: 自分のアカウント（アカウント設定、ニックネームの変更、アカウント削除）
+  - name: communities
+    description: コミュニティ（一覧、詳細、作成、編集、削除）
+  - name: members
+    description: コミュニティのメンバー（参加申請、承認・却下、退会、運営スタッフの任命、除名）
+  - name: events
+    description: イベント（一覧・検索、詳細、作成、編集、削除）
+  - name: applications
+    description: イベントへの申込み（申込み、キャンセル、申込者一覧）
+  - name: notifications
+    description: お知らせ
+
+# ★ API の一覧。分野ごとにまとめて並べる
+paths:
+
+  # ==================== アカウント登録、ログイン、ログアウト（auth） ====================
+
+  /api/auth/csrf:
+    get:
+      operationId: getCsrfToken
+      summary: CSRF トークンを受け取る
+      description: |
+        画面を開いたときに最初に呼びます。サーバーは XSRF-TOKEN という Cookie に、CSRF の対策の合言葉を入れて返します。
+        画面は、データを変える API を呼ぶとき、この値を X-XSRF-TOKEN ヘッダーに入れて送ります（README 1.7）。
+        ログインしていなくても呼べます。
+      tags: [auth]
+      # security: [] は「ログインも CSRF トークンも要らない」という意味
+      security: []
+      responses:
+        '204':
+          description: 成功。XSRF-TOKEN の Cookie を返す（返事の中身はなし）
+
+  /api/auth/signup:
+    post:
+      operationId: signup
+      summary: アカウントを登録する（F-01、F-18）
+      description: |
+        本名、ニックネーム、メールアドレス、パスワードを登録します。
+        プライバシーポリシーと利用規約への同意が必要です（F-18、要件定義書 5.7）。
+        プライバシーポリシーと利用規約のページ（S-13、S-14）は、画面に文章を書くだけなので、API はありません。
+        サーバーは、同意した日時と、そのときの規約のバージョンを記録します。
+        登録に成功すると、そのままログインした状態になります。
+
+        返す code
+        - VALIDATION_ERROR（400）：入力が正しくない、または同意していない
+        - EMAIL_ALREADY_REGISTERED（409）：そのメールアドレスはすでに登録されている
+      tags: [auth]
+      # ログインは不要だが、CSRF トークンは必要
+      security:
+        - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: 登録に成功し、ログインした状態になった。セッション ID の Cookie を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/auth/login:
+    post:
+      operationId: login
+      summary: ログインする（F-02）
+      description: |
+        メールアドレスとパスワードでログインします。
+        成功すると、セッション ID を新しく作り直して Cookie で返します（ログインの前に渡していた ID を使い回さない。セッション固定攻撃の対策）。
+
+        5回続けて失敗すると、そのアカウントは15分間ログインできなくなります（非機能要件 3章）。
+
+        返す code
+        - VALIDATION_ERROR（400）：メールアドレスかパスワードが空
+        - INVALID_CREDENTIALS（401）：メールアドレスかパスワードが違う。
+          どちらが違うかは教えない（登録されているメールアドレスを探られないようにするため）
+        - ACCOUNT_LOCKED（429）：失敗が続いたため、ロックされている
+      tags: [auth]
+      security:
+        - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: ログインに成功した。セッション ID の Cookie を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/auth/logout:
+    post:
+      operationId: logout
+      summary: ログアウトする（F-02）
+      description: |
+        サーバーのセッションを消し、セッション ID の Cookie も消します。
+        ログインしていない状態で呼んでも、成功（204）を返します。
+      tags: [auth]
+      security:
+        - csrfToken: []
+      responses:
+        '204':
+          description: ログアウトした
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ==================== 自分のアカウント（account） ====================
+
+  /api/me:
+    get:
+      operationId: getMe
+      summary: 自分のアカウントの情報を取得する（S-12）
+      description: |
+        ログインしている自分の情報を返します。本名とメールアドレスを返すのは、この API だけです（README 1.9）。
+        画面は、起動したときにこの API を呼んで、ログインしているかどうかを判断します（401 ならログインしていない）。
+      tags: [account]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      operationId: updateMe
+      summary: ニックネームを変更する（F-21）
+      description: |
+        自分のニックネームを変えます。本名とメールアドレスは変えられません（問い合わせで対応する。要件定義書 4.3）。
+        変えると、過去の申込みの記録を含めて、すべての画面で新しいニックネームが表示されます。
+      tags: [account]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+      responses:
+        '200':
+          description: 変更した。変更後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      operationId: deleteMe
+      summary: アカウントを削除する（F-17）
+      description: |
+        自分のアカウントを削除します。本人の操作であることを確かめるため、パスワードをもう一度送ってもらいます。
+        要件定義書 5.5 のとおりに処理します。
+        - 参加しているすべてのコミュニティから退会し、開催前のイベントへの申込みをすべてキャンセルする
+        - 本名、ニックネーム、メールアドレス、パスワードの情報を消す
+        - 過去の申込みの記録は残し、申込者は「退会したユーザー」として表示する
+        - セッションを消し、ログアウトした状態にする
+
+        返す code
+        - VALIDATION_ERROR（400）：パスワードが空
+        - INVALID_PASSWORD（400）：パスワードが違う。errors に password の項目を入れて返す
+        - OWNS_ACTIVE_COMMUNITIES（409）：アーカイブしていない、オーナーをしているコミュニティがある
+        - OWNED_COMMUNITY_HAS_UPCOMING_EVENTS（409）：オーナーをしているコミュニティに、開催前のイベントが残っている
+      tags: [account]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteMeRequest'
+      responses:
+        '204':
+          description: 削除した
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/me/managed-communities:
+    get:
+      operationId: listManagedCommunities
+      summary: 管理しているコミュニティの一覧を取得する（S-16）
+      description: |
+        自分がオーナーか運営スタッフをしているコミュニティの一覧を、作成日時の新しい順に返します。
+        アーカイブ済みのコミュニティも含めます（オーナーが元に戻せるように）。
+        自分の立場（オーナーか運営スタッフか）も返します。
+      tags: [account]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedCommunityListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ==================== コミュニティ（communities） ====================
+
+  /api/communities:
+    get:
+      operationId: listCommunities
+      summary: コミュニティの一覧を取得する（F-04、S-17）
+      description: |
+        コミュニティを、作成日時の新しい順に返します。ログインしていなくても呼べます。
+        アーカイブ済みのコミュニティは含めません（要件定義書 5.9）。
+      tags: [communities]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    post:
+      operationId: createCommunity
+      summary: コミュニティを作成する（F-03、S-04）
+      description: |
+        コミュニティを作ります。作った人がオーナーになります。
+      tags: [communities]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommunityInput'
+      responses:
+        '201':
+          description: 作成した。作ったコミュニティを返す
+          headers:
+            Location:
+              description: 作ったコミュニティの API の URL（例：/api/communities/3）
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/communities/{communityId}:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    get:
+      operationId: getCommunity
+      summary: コミュニティの詳細を取得する（F-04、S-05）
+      description: |
+        コミュニティの情報を返します。ログインしていなくても呼べます。
+        アーカイブ済みのコミュニティも返します（archivedAt に日時が入る）。
+        ログインしている場合は、そのコミュニティでの自分の立場と、参加申請の状況も返します。
+        コミュニティのイベントの一覧は、別の API（GET /api/communities/{communityId}/events）で取得します。
+      tags: [communities]
+      security:
+        - {}               # {} は「ログインしていなくてもよい」という意味
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      operationId: updateCommunity
+      summary: コミュニティを編集する（F-05、S-06）
+      description: |
+        コミュニティの名前と説明を変えます。オーナーだけができます。
+        アーカイブ中は編集できません（元に戻してから編集する。要件定義書 5.9）。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+        - COMMUNITY_ARCHIVED（409）：アーカイブ中
+      tags: [communities]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommunityInput'
+      responses:
+        '200':
+          description: 変更した。変更後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    # コミュニティは削除せず、アーカイブにする（要件定義書 5.9）。
+    # 「アーカイブされている状態」を1つのものとみなし、PUT で作る（アーカイブする）、DELETE で消す（元に戻す）と表す
+    put:
+      operationId: archiveCommunity
+      summary: コミュニティをアーカイブする（F-05、S-06）
+      description: |
+        コミュニティをアーカイブします。オーナーだけができます。コミュニティを完全に消すことはしません。
+        要件定義書 5.9 のとおりに扱います。
+        - コミュニティ一覧から外れる（詳細は見られる）
+        - 開催前のイベントは、そのまま開催される（申込み、キャンセル、編集、申込者一覧は今までどおり）
+        - 新しいイベントの作成と、参加の申請はできなくなる
+        - 申請中だった参加申請は、すべて却下にする
+
+        すでにアーカイブ中のときに呼んでも、成功（200）を返します。
+        PUT は「この状態にする」という意味なので、何度呼んでも結果が同じになるようにしている。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+      tags: [communities]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: アーカイブした。アーカイブ後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      operationId: unarchiveCommunity
+      summary: アーカイブしたコミュニティを元に戻す（F-05、S-06、S-16）
+      description: |
+        アーカイブを解除して、元の状態に戻します。オーナーだけができます。
+        アーカイブしたときに却下した参加申請は、元に戻りません。
+        アーカイブ中でないときに呼んでも、成功（200）を返します。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+      tags: [communities]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: 元に戻した。元に戻した後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==================== コミュニティのメンバー（members） ====================
+
+  /api/communities/{communityId}/join-requests:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    get:
+      operationId: listJoinRequests
+      summary: 参加申請の一覧を取得する（F-07、S-07）
+      description: |
+        「申請中」の参加申請を、申請した日時の古い順に返します（先に申請した人から判断できるように）。
+        オーナーと運営スタッフだけができます。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+      tags: [members]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinRequestListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      operationId: createJoinRequest
+      summary: コミュニティへの参加を申請する（F-06、S-05）
+      description: |
+        自分を、このコミュニティに参加させてほしいと申請します。申請の状態は「申請中」から始まります。
+        却下された人、退会した人、除名された人も、もう一度申請できます（要件定義書 5.1、5.4）。
+
+        返す code
+        - ALREADY_MEMBER（409）：すでにメンバー（オーナー、運営スタッフを含む）
+        - JOIN_REQUEST_PENDING（409）：すでに申請中
+        - COMMUNITY_ARCHIVED（409）：アーカイブ中のコミュニティには申請できない
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '201':
+          description: 申請した
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/join-requests/{joinRequestId}:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/JoinRequestId'
+
+    patch:
+      operationId: decideJoinRequest
+      summary: 参加申請を承認・却下する（F-07、S-07）
+      description: |
+        申請中の参加申請を、承認または却下します。オーナーと運営スタッフだけができます。
+        承認すると、申請した人はメンバーになります。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+        - JOIN_REQUEST_ALREADY_DECIDED（409）：すでに承認・却下されている（ほかの運営スタッフが先に処理した場合、
+          コミュニティがアーカイブされて自動で却下された場合など）
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideJoinRequestRequest'
+      responses:
+        '200':
+          description: 承認・却下した。処理後の申請を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/members:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    get:
+      operationId: listMembers
+      summary: メンバーの一覧を取得する（S-07）
+      description: |
+        コミュニティのメンバー（オーナー、運営スタッフを含む）を、立場の順（オーナー → 運営スタッフ → メンバー）、
+        同じ立場なら参加した日時の古い順に返します。
+        オーナーと運営スタッフだけができます。返す名前はニックネームだけです（README 1.9）。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+      tags: [members]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/communities/{communityId}/members/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/UserId'
+
+    patch:
+      operationId: updateMemberRole
+      summary: 運営スタッフに任命・解除する（F-09、S-07）
+      description: |
+        メンバーを運営スタッフにする（role に staff を送る）、または運営スタッフをメンバーに戻します（member を送る）。
+        オーナーだけができます。オーナー自身の立場は変えられません。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+        - CANNOT_CHANGE_OWNER（409）：オーナーの立場を変えようとした
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRoleRequest'
+      responses:
+        '200':
+          description: 変更した。変更後のメンバーの情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      operationId: removeMember
+      summary: メンバーを除名する（F-19、S-07）
+      description: |
+        メンバーまたは運営スタッフを、コミュニティから外します。オーナーだけができます。
+        除名された人の、開催前のイベントへの申込み（キャンセル待ちを含む）は、すべてキャンセルされます（要件定義書 5.4.1）。
+        締め切り前のイベントでは、キャンセル待ちの繰り上げも起きます。
+        画面は、除名する前に必ず確認の画面を出します（この API を呼ぶ前の画面側の決まり）。
+
+        返す code
+        - FORBIDDEN（403）：オーナーではない
+        - CANNOT_REMOVE_OWNER（409）：オーナーを除名しようとした
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: 除名した
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/membership:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    delete:
+      operationId: leaveCommunity
+      summary: コミュニティを退会する（F-08、S-05）
+      description: |
+        自分が、このコミュニティから抜けます。メンバーと運営スタッフができます。オーナーは退会できません（要件定義書 5.1）。
+        開催前のイベントへの申込み（キャンセル待ちを含む）は、すべてキャンセルされます（要件定義書 5.4）。
+        締め切り前のイベントでは、キャンセル待ちの繰り上げも起きます。
+
+        URL を /members/{userId} ではなく /membership（自分の参加）にしているのは、
+        他人を外す操作（除名）と、自分が抜ける操作を、URL の段階で分けるため。
+
+        返す code
+        - NOT_MEMBER（409）：メンバーではない
+        - OWNER_CANNOT_LEAVE（409）：オーナーは退会できない
+      tags: [members]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: 退会した
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ==================== イベント（events） ====================
+
+  /api/events:
+    get:
+      operationId: searchEvents
+      summary: イベントの一覧・検索（F-22、S-01）
+      description: |
+        開催前のイベントを返します。ログインしていなくても呼べます。要件定義書 5.8 のとおりに動きます。
+        - q がないとき：作成日時の新しい順
+        - q があるとき：タイトルと説明に単語を含むイベントを、当てはまった単語の数が多い順（同じなら作成日時の新しい順）
+        - 単語は空白（半角・全角）で区切る。英字の大文字と小文字は区別しない。100文字、5語まで使う
+        - 1ページ 30件。検索しているときは 300件までで、超えたら limitExceeded を true にする
+        - アーカイブ中のコミュニティのイベントも含める（要件定義書 5.9）
+        - page が数でない、または 1 より小さいときは、1 として扱う
+      tags: [events]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: 検索する単語（空白で区切って複数入れられる）。なければ検索しない
+          schema:
+            type: string
+            maxLength: 100
+          example: Java 初心者
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListResponse'
+
+  /api/communities/{communityId}/events:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    get:
+      operationId: listCommunityEvents
+      summary: コミュニティのイベントの一覧を取得する（F-11、S-05）
+      description: |
+        1つのコミュニティのイベントを返します。ログインしていなくても呼べます。
+        終了したイベントは、トップのイベント一覧には出さないので、ここで見られるようにしています（要件定義書 5.8）。
+        - status=upcoming（初期値）：開催前のイベントを、開始日時の近い順
+        - status=past：終了したイベントを、開始日時の新しい順
+      tags: [events]
+      security: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: upcoming（開催前）か past（終了済み）
+          schema:
+            type: string
+            enum: [upcoming, past]
+            default: upcoming
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityEventListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      operationId: createEvent
+      summary: イベントを作成する（F-10、S-08）
+      description: |
+        コミュニティにイベントを作ります。オーナーと運営スタッフだけができます。
+        入力のルール（EventInput の説明も参照）
+        - 開始日時は、今より後
+        - 終了日時は、開始日時より後
+        - 申込み締め切り日時は、開始日時より前（要件定義書 5.2）
+
+        返す code
+        - VALIDATION_ERROR（400）：入力が正しくない（日時の前後関係を含む）
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+        - COMMUNITY_ARCHIVED（409）：アーカイブ中のコミュニティには作れない（要件定義書 5.9）
+      tags: [events]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventInput'
+      responses:
+        '201':
+          description: 作成した。作ったイベントを返す
+          headers:
+            Location:
+              description: 作ったイベントの API の URL
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/events/{eventId}:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/EventId'
+
+    get:
+      operationId: getEvent
+      summary: イベントの詳細を取得する（F-11、S-09）
+      description: |
+        イベントの情報を返します。ログインしていなくても呼べます。
+        ログインしている場合は、自分の申込みの状況と、コミュニティでの自分の立場も返します。
+        イベントが、指定したコミュニティのものでないときは 404 を返します。
+      tags: [events]
+      security:
+        - {}
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      operationId: updateEvent
+      summary: イベントを編集する（F-10、S-10）
+      description: |
+        イベントの内容を変えます。オーナーと運営スタッフだけができます。
+        コミュニティがアーカイブ中でも編集できます（要件定義書 5.9）。
+        編集の画面は、変えていない項目も含めて、すべての項目を送ります。
+
+        入力のルールは作成と同じです。加えて、次のルールがあります。
+        - 定員を、今の申込み済みの人数より少なくできない（要件定義書 5.2）
+        - 終了したイベントは編集できない
+        - 締め切り前に定員を増やしたときは、増えた分だけキャンセル待ちの人を繰り上げる
+
+        返す code
+        - VALIDATION_ERROR（400）：入力が正しくない
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+        - CAPACITY_BELOW_APPLIED（409）：定員が、今の申込み済みの人数より少ない
+        - EVENT_ENDED（409）：終了したイベント
+      tags: [events]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventInput'
+      responses:
+        '200':
+          description: 変更した。変更後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      operationId: deleteEvent
+      summary: イベントを削除する（F-10、S-10）
+      description: |
+        開催前のイベントを削除します。オーナーと運営スタッフだけができます。
+        申込み（キャンセル待ちを含む）も一緒に削除し、申し込んでいた人にお知らせを送ります（F-20、要件定義書 5.10）。
+        終了したイベントは、参加の記録として残すため、削除できません。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+        - EVENT_ENDED（409）：終了したイベント
+      tags: [events]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: 削除した
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ==================== イベントへの申込み（applications） ====================
+
+  /api/communities/{communityId}/events/{eventId}/applications:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/EventId'
+
+    get:
+      operationId: listApplications
+      summary: 申込者の一覧を取得する（F-13、S-11）
+      description: |
+        イベントの申込者を返します。オーナーと運営スタッフだけができます。
+        返す名前はニックネームだけで、本名は返しません（要件定義書 5.6）。
+        アカウントを削除した人は、ニックネームが null になります。
+        並び順：申込み済みの人を申し込んだ日時の古い順、そのあとにキャンセル待ちの人を順番どおりに並べる。
+        キャンセルした人は含めません。終了したイベントでも見られます。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+      tags: [applications]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      operationId: applyToEvent
+      summary: イベントに申し込む（F-12、F-14、F-15、S-09）
+      description: |
+        自分を、このイベントに申し込みます。そのコミュニティのメンバー（オーナー、運営スタッフを含む）だけができます。
+        - 空きがあれば「申込み済み」（applied）になる
+        - 満席なら「キャンセル待ち」（waitlisted）になる（F-15。MVP の後半で作る。それまでは EVENT_FULL を返す）
+        - 残り1枠に何人が同時に申し込んでも、定員を超えないようにする（F-14）
+
+        返す code
+        - NOT_MEMBER（403）：コミュニティのメンバーではない
+        - ALREADY_APPLIED（409）：すでに申し込んでいる（キャンセル待ちを含む）
+        - APPLICATION_DEADLINE_PASSED（409）：申込み締め切り日時を過ぎている
+        - EVENT_FULL（409）：満席（キャンセル待ちを作るまでの間だけ使う）
+      tags: [applications]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '201':
+          description: 申し込んだ。申込みの状況を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyApplication'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/events/{eventId}/my-application:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/EventId'
+
+    delete:
+      operationId: cancelMyApplication
+      summary: 自分の申込みをキャンセルする（F-12、F-16、F-20、S-09）
+      description: |
+        自分の申込み（キャンセル待ちを含む）を取り消します。
+        URL を /applications/{番号} ではなく /my-application（自分の申込み）にしているのは、
+        他人の申込みを取り消せないことを、URL の段階ではっきりさせるため。
+
+        締め切り日時の前と後で、動きが変わります（要件定義書 5.2、5.3）。
+        - 締め切り前：取り消す。申込み済みの人が取り消したときは、キャンセル待ちの先頭の人を繰り上げる（F-16）
+        - 締め切り後：取り消す。繰り上げは行わない。オーナーと運営スタッフにお知らせを送る（F-20、要件定義書 5.10）。
+          画面は、呼ぶ前に「原則としてキャンセルはできません」という確認を出す
+
+        返す code
+        - NOT_APPLIED（409）：申し込んでいない
+        - EVENT_ENDED（409）：終了したイベント
+      tags: [applications]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: 取り消した
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ==================== お知らせ（notifications） ====================
+
+  /api/notifications:
+    get:
+      operationId: listNotifications
+      summary: お知らせの一覧を取得する（F-20、S-15）
+      description: |
+        自分あてのお知らせを、新しい順に返します（要件定義書 5.10）。未読の件数も一緒に返します。
+      tags: [notifications]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/notifications/unread-count:
+    get:
+      operationId: getUnreadNotificationCount
+      summary: 未読のお知らせの件数を取得する（F-20）
+      description: |
+        画面上部に表示する、未読の件数だけを返します。
+        画面の移動のたびに呼ぶので、一覧を取るより軽い API として分けています。
+      tags: [notifications]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadNotificationCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/notifications/{notificationId}/read:
+    parameters:
+      - $ref: '#/components/parameters/NotificationId'
+
+    # 「既読になっている状態」を PUT で作る、と表す（アーカイブと同じ考え方）。何度呼んでも結果は同じ
+    put:
+      operationId: markNotificationAsRead
+      summary: お知らせを既読にする（F-20、S-15）
+      description: |
+        お知らせを1件、既読にします。すでに既読のときに呼んでも、成功（200）を返します。
+        他人あてのお知らせを指定したときは、存在しない場合と同じく 404 を返します
+        （他人あてのお知らせがあることを知られないようにするため）。
+      tags: [notifications]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: 既読にした。既読にしたお知らせを返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/notifications/read-all:
+    # すべてのお知らせをまとめて既読にする操作は、作る・消すに当てはめにくいので、
+    # 例外として「操作の名前」を URL にして POST で呼ぶ（README 1.2）
+    post:
+      operationId: markAllNotificationsAsRead
+      summary: お知らせをすべて既読にする（F-20、S-15）
+      description: |
+        自分あてのお知らせを、すべて既読にします。未読がないときに呼んでも、成功（204）を返します。
+      tags: [notifications]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: すべて既読にした
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+# 何度も使う部品。各 API からは $ref で参照する
+components:
+
+  # ---------- ログインと CSRF の方式 ----------
+  securitySchemes:
+    sessionCookie:
+      # ログインの証明（セッション ID）を、Cookie で送る方式
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: |
+        ログインに成功すると、サーバーがセッション ID を Cookie で渡します。
+        Cookie には HttpOnly、Secure、SameSite=Lax を付けます。画面のプログラムからは読めません。
+        30分間操作がなければ、ログアウトになります。
+    csrfToken:
+      # CSRF の対策の合言葉を、ヘッダーで送る方式
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+      description: |
+        データを変える API（POST、PATCH、DELETE）で必要です。
+        サーバーが XSRF-TOKEN という Cookie で渡した値を、このヘッダーに入れて送ります。
+        一致しないときは 403 を返します。
+
+  # ---------- URL に入れる値 ----------
+  parameters:
+    Page:
+      name: page
+      in: query          # query：URL の「?」より後ろに付ける値（例：?page=2）
+      required: false
+      description: ページ番号。1から始まる。付けなければ1ページ目。
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    CommunityId:
+      name: communityId
+      in: path           # path：URL の途中に入れる値（例：/api/communities/3 の 3）
+      required: true
+      description: コミュニティの番号
+      schema:
+        type: integer
+        minimum: 1
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      description: イベントの番号
+      schema:
+        type: integer
+        minimum: 1
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: ユーザーの番号
+      schema:
+        type: integer
+        minimum: 1
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      description: お知らせの番号
+      schema:
+        type: integer
+        minimum: 1
+    JoinRequestId:
+      name: joinRequestId
+      in: path
+      required: true
+      description: 参加申請の番号
+      schema:
+        type: integer
+        minimum: 1
+
+  # ---------- データの形 ----------
+  schemas:
+
+    Problem:
+      type: object
+      description: |
+        エラーのときに返す形（RFC 9457 Problem Details）。すべての API で同じ形にする。
+        画面は code を見て表示を変える。detail の文章は変わることがあるので、文章では判断しない。
+      required: [type, title, status, detail, code]
+      properties:
+        type:
+          type: string
+          description: エラーの種類を表す URI。このアプリでは使わないので、いつも "about:blank"
+          example: about:blank
+        title:
+          type: string
+          description: HTTP ステータスコードの短い説明（英語）
+          example: Conflict
+        status:
+          type: integer
+          description: HTTP ステータスコード
+          example: 409
+        detail:
+          type: string
+          description: 利用者に見せてよい、日本語の説明。プログラムの内部の情報は入れない
+          example: このイベントは満席です。
+        code:
+          type: string
+          description: エラーの種類を表す決まった記号。どの記号を返すかは、各 API の説明に書く
+          example: EVENT_FULL
+
+    ValidationProblem:
+      description: 入力のチェックで引っかかったとき（400）に返す形。Problem に errors を足したもの
+      # allOf：「Problem の項目すべて」と「下に書いた項目」を合わせた形、という意味
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: array
+              description: 引っかかった項目の一覧
+              items:
+                $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      description: 入力のチェックで引っかかった項目1つ分
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          description: 引っかかった項目の名前（送ったデータの項目の名前と同じ）
+          example: title
+        message:
+          type: string
+          description: 利用者に見せる、日本語の説明
+          example: タイトルを入力してください。
+
+    # ---------- アカウント ----------
+
+    Me:
+      type: object
+      description: |
+        ログインしている自分の情報。本名とメールアドレスを含むので、本人にだけ返す（README 1.9）。
+      required: [id, realName, nickname, email, createdAt]
+      properties:
+        id:
+          type: integer
+          description: ユーザーの番号
+          example: 12
+        realName:
+          type: string
+          description: 本名。本人と管理者だけが見られる
+          example: 山田 太郎
+        nickname:
+          type: string
+          description: ニックネーム。ほかのユーザーに表示される名前
+          example: たろう
+        email:
+          type: string
+          format: email
+          description: メールアドレス。本人と管理者だけが見られる
+          example: taro@example.com
+        createdAt:
+          type: string
+          format: date-time
+          description: 登録した日時（世界標準時）
+          example: '2026-10-01T03:00:00Z'
+
+    SignupRequest:
+      type: object
+      description: アカウント登録のときに送るデータ
+      required: [realName, nickname, email, password, agreedToPolicies]
+      properties:
+        realName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: 本名。1〜50文字
+          example: 山田 太郎
+        nickname:
+          $ref: '#/components/schemas/Nickname'
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: メールアドレス。254文字まで。ほかのアカウントと同じものは使えない
+          example: taro@example.com
+        password:
+          $ref: '#/components/schemas/Password'
+        agreedToPolicies:
+          type: boolean
+          # const: true は「true 以外は受け付けない」という意味
+          const: true
+          description: プライバシーポリシーと利用規約に同意したか。true でなければ登録できない
+          example: true
+
+    LoginRequest:
+      type: object
+      description: ログインのときに送るデータ
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          description: メールアドレス
+          example: taro@example.com
+        password:
+          type: string
+          description: パスワード
+          example: campfire2026
+
+    UpdateMeRequest:
+      type: object
+      description: ニックネームを変えるときに送るデータ
+      required: [nickname]
+      properties:
+        nickname:
+          $ref: '#/components/schemas/Nickname'
+
+    DeleteMeRequest:
+      type: object
+      description: アカウントを削除するときに送るデータ。本人の確認のため、パスワードを送る
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: 今のパスワード
+          example: campfire2026
+
+    Nickname:
+      type: string
+      minLength: 1
+      maxLength: 30
+      description: ニックネーム。1〜30文字。ほかのユーザーと同じでもよい
+      example: たろう
+
+    Password:
+      type: string
+      minLength: 8
+      maxLength: 64
+      # pattern：使える文字のルール（正規表現）。半角の英数字と記号だけを許す
+      pattern: '^[\x21-\x7E]+$'
+      description: |
+        パスワード。8〜64文字。使える文字は、半角の英字、数字、記号だけ（空白は使えない）。
+        パスワードの保存に使う BCrypt は先頭の 72バイトしか使わないため、
+        1文字が1バイトになる半角の文字に限っている。
+      example: campfire2026
+
+    # ---------- ほかのユーザー ----------
+
+    UserRef:
+      type: object
+      description: |
+        ほかのユーザーを表すときの形。ニックネームだけを返し、本名とメールアドレスは返さない（README 1.9）。
+      required: [userId, nickname]
+      properties:
+        userId:
+          type: integer
+          description: ユーザーの番号
+          example: 12
+        nickname:
+          # ['string', 'null'] は「文字、または null（空）」という意味
+          type: ['string', 'null']
+          description: ニックネーム。アカウントを削除した人は null（画面で「退会したユーザー」と表示する）
+          example: たろう
+
+    # ---------- コミュニティ ----------
+
+    CommunityRole:
+      type: string
+      description: |
+        コミュニティの中での立場。
+        - owner：オーナー
+        - staff：運営スタッフ
+        - member：メンバー
+      enum: [owner, staff, member]
+      example: member
+
+    ArchivedAt:
+      type: ['string', 'null']
+      format: date-time
+      description: |
+        コミュニティをアーカイブした日時（世界標準時）。アーカイブしていなければ null。
+        画面は、null でなければ「アーカイブ済み」と表示する（要件定義書 5.9）
+      example: null
+
+    CommunityInput:
+      type: object
+      description: コミュニティを作成・編集するときに送るデータ
+      required: [name, description]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: コミュニティの名前。1〜50文字
+          example: Java 勉強会 東京
+        description:
+          type: string
+          maxLength: 2000
+          description: コミュニティの説明。2000文字まで（空でもよい）
+          example: Java を学ぶ人のための勉強会です。初心者も歓迎します。
+
+    CommunitySummary:
+      type: object
+      description: コミュニティの一覧に表示する、1件分の情報
+      required: [id, name, description, memberCount, createdAt]
+      properties:
+        id:
+          type: integer
+          description: コミュニティの番号
+          example: 3
+        name:
+          type: string
+          description: コミュニティの名前
+          example: Java 勉強会 東京
+        description:
+          type: string
+          description: コミュニティの説明
+          example: Java を学ぶ人のための勉強会です。初心者も歓迎します。
+        memberCount:
+          type: integer
+          description: メンバーの人数（オーナー、運営スタッフを含む）
+          example: 24
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成した日時（世界標準時）
+          example: '2026-09-20T03:00:00Z'
+
+    CommunityListResponse:
+      description: コミュニティの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CommunitySummary'
+
+    CommunityDetail:
+      description: コミュニティの詳細。一覧の情報に、オーナーと、自分との関係を足したもの
+      allOf:
+        - $ref: '#/components/schemas/CommunitySummary'
+        - type: object
+          required: [owner, archivedAt, myRole, myJoinRequestStatus]
+          properties:
+            owner:
+              $ref: '#/components/schemas/UserRef'
+            archivedAt:
+              $ref: '#/components/schemas/ArchivedAt'
+            myRole:
+              description: |
+                このコミュニティでの自分の立場。メンバーでない、またはログインしていないときは null。
+                画面は、これを見てボタン（参加を申請する、退会する、管理画面へ移動）を出し分ける
+              oneOf:
+                - $ref: '#/components/schemas/CommunityRole'
+                - type: 'null'
+            myJoinRequestStatus:
+              description: |
+                自分の参加申請の状態。申請していない、ログインしていない、またはすでにメンバーのときは null
+              oneOf:
+                - $ref: '#/components/schemas/JoinRequestStatus'
+                - type: 'null'
+
+    ManagedCommunity:
+      type: object
+      description: 管理しているコミュニティの一覧に表示する、1件分の情報
+      required: [id, name, memberCount, archivedAt, myRole, pendingJoinRequestCount]
+      properties:
+        archivedAt:
+          $ref: '#/components/schemas/ArchivedAt'
+        id:
+          type: integer
+          description: コミュニティの番号
+          example: 3
+        name:
+          type: string
+          description: コミュニティの名前
+          example: Java 勉強会 東京
+        memberCount:
+          type: integer
+          description: メンバーの人数
+          example: 24
+        myRole:
+          description: 自分の立場（owner か staff）
+          allOf:
+            - $ref: '#/components/schemas/CommunityRole'
+        pendingJoinRequestCount:
+          type: integer
+          description: 申請中の参加申請の件数（承認・却下を待っている人数）
+          example: 2
+
+    ManagedCommunityListResponse:
+      description: 管理しているコミュニティの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ManagedCommunity'
+
+    # ---------- コミュニティのメンバー ----------
+
+    JoinRequestStatus:
+      type: string
+      description: |
+        参加申請の状態（要件定義書 5.1）。
+        - pending：申請中
+        - approved：承認済み
+        - rejected：却下
+      enum: [pending, approved, rejected]
+      example: pending
+
+    JoinRequest:
+      type: object
+      description: 参加申請1件分の情報
+      required: [id, user, status, requestedAt]
+      properties:
+        id:
+          type: integer
+          description: 参加申請の番号
+          example: 41
+        user:
+          $ref: '#/components/schemas/UserRef'
+        status:
+          $ref: '#/components/schemas/JoinRequestStatus'
+        requestedAt:
+          type: string
+          format: date-time
+          description: 申請した日時（世界標準時）
+          example: '2026-10-05T12:00:00Z'
+
+    JoinRequestListResponse:
+      description: 参加申請の一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/JoinRequest'
+
+    DecideJoinRequestRequest:
+      type: object
+      description: 参加申請を承認・却下するときに送るデータ
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: approved（承認）か rejected（却下）
+          enum: [approved, rejected]
+          example: approved
+
+    Member:
+      type: object
+      description: メンバー1人分の情報
+      required: [user, role, joinedAt]
+      properties:
+        user:
+          $ref: '#/components/schemas/UserRef'
+        role:
+          $ref: '#/components/schemas/CommunityRole'
+        joinedAt:
+          type: string
+          format: date-time
+          description: メンバーになった日時（世界標準時）
+          example: '2026-09-25T08:30:00Z'
+
+    MemberListResponse:
+      description: メンバーの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Member'
+
+    UpdateMemberRoleRequest:
+      type: object
+      description: 運営スタッフに任命・解除するときに送るデータ
+      required: [role]
+      properties:
+        role:
+          type: string
+          description: staff（運営スタッフにする）か member（メンバーに戻す）。owner は送れない
+          enum: [staff, member]
+          example: staff
+
+    # ---------- イベント ----------
+    # EventSummary と EventListResponse は、frontend/src/types/event.ts と同じ形にしている
+
+    EventSummary:
+      type: object
+      description: イベントの一覧に表示する、1件分の情報
+      required: [id, communityId, communityName, title, startAt, endAt, capacity, remainingSeats]
+      properties:
+        id:
+          type: integer
+          description: イベントの番号
+          example: 5
+        communityId:
+          type: integer
+          description: どのコミュニティのイベントか（コミュニティの番号）
+          example: 3
+        communityName:
+          type: string
+          description: コミュニティの名前
+          example: Java 勉強会 東京
+        title:
+          type: string
+          description: イベントのタイトル
+          example: Java 初心者向け勉強会
+        startAt:
+          type: string
+          format: date-time
+          description: 開始日時（世界標準時）
+          example: '2026-10-24T05:00:00Z'
+        endAt:
+          type: string
+          format: date-time
+          description: 終了日時（世界標準時）
+          example: '2026-10-24T07:00:00Z'
+        capacity:
+          type: integer
+          description: 定員
+          example: 30
+        remainingSeats:
+          type: integer
+          description: 残りの枠数（0 なら満席）
+          example: 5
+
+    EventListResponse:
+      description: イベントの一覧・検索の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items, limitExceeded]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventSummary'
+            limitExceeded:
+              type: boolean
+              description: 検索結果が 300件を超えたかどうか（超えたら true。totalCount は 300 になる）
+              example: false
+
+    CommunityEventListResponse:
+      description: コミュニティのイベントの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventSummary'
+
+    EventInput:
+      type: object
+      description: |
+        イベントを作成・編集するときに送るデータ。
+        日時の前後関係のルール：今 < 開始日時、申込み締め切り日時 < 開始日時 < 終了日時
+      required: [title, description, startAt, endAt, applicationDeadline, location, capacity]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: タイトル。1〜100文字
+          example: Java 初心者向け勉強会
+        description:
+          type: string
+          maxLength: 5000
+          description: 説明。5000文字まで（空でもよい）。検索の対象になる
+          example: 週末の午後に、みんなで手を動かしながら学びます。
+        startAt:
+          type: string
+          format: date-time
+          description: 開始日時（世界標準時）
+          example: '2026-10-24T05:00:00Z'
+        endAt:
+          type: string
+          format: date-time
+          description: 終了日時（世界標準時）
+          example: '2026-10-24T07:00:00Z'
+        applicationDeadline:
+          type: string
+          format: date-time
+          description: 申込み締め切り日時（世界標準時）。キャンセルの期限も兼ねる（要件定義書 5.2）
+          example: '2026-10-23T15:00:00Z'
+        location:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: |
+            場所。1〜200文字。誰でも見られるので、個人の住所は書かない（画面で注意書きを出す。要件定義書 5.2）
+          example: 渋谷区の貸し会議室（詳細は申込み後にお知らせします）
+        capacity:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: 定員。1〜1000人
+          example: 30
+
+    EventDetail:
+      description: イベントの詳細。一覧の情報に、説明、場所、締め切り、自分との関係などを足したもの
+      allOf:
+        - $ref: '#/components/schemas/EventSummary'
+        - type: object
+          required: [description, location, applicationDeadline, waitlistCount, communityArchivedAt, myRole, myApplication, createdAt]
+          properties:
+            description:
+              type: string
+              description: 説明
+              example: 週末の午後に、みんなで手を動かしながら学びます。
+            location:
+              type: string
+              description: 場所
+              example: 渋谷区の貸し会議室（詳細は申込み後にお知らせします）
+            applicationDeadline:
+              type: string
+              format: date-time
+              description: 申込み締め切り日時（世界標準時）
+              example: '2026-10-23T15:00:00Z'
+            waitlistCount:
+              type: integer
+              description: キャンセル待ちの人数
+              example: 0
+            communityArchivedAt:
+              $ref: '#/components/schemas/ArchivedAt'
+            myRole:
+              description: |
+                コミュニティでの自分の立場。メンバーでない、またはログインしていないときは null。
+                画面は、これを見て「申し込む」ボタン（メンバーだけ）や、管理画面へのリンク（オーナー、運営スタッフ）を出し分ける
+              oneOf:
+                - $ref: '#/components/schemas/CommunityRole'
+                - type: 'null'
+            myApplication:
+              description: 自分の申込みの状況。申し込んでいない、またはログインしていないときは null
+              oneOf:
+                - $ref: '#/components/schemas/MyApplication'
+                - type: 'null'
+            createdAt:
+              type: string
+              format: date-time
+              description: 作成した日時（世界標準時）
+              example: '2026-10-01T03:00:00Z'
+
+    # ---------- イベントへの申込み ----------
+
+    ApplicationStatus:
+      type: string
+      description: |
+        申込みの状態。
+        - applied：申込み済み
+        - waitlisted：キャンセル待ち
+      enum: [applied, waitlisted]
+      example: applied
+
+    MyApplication:
+      type: object
+      description: 自分の申込みの状況
+      required: [status, waitlistPosition, appliedAt]
+      properties:
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        waitlistPosition:
+          type: ['integer', 'null']
+          description: キャンセル待ちの何番目か（1から始まる）。申込み済みのときは null
+          example: null
+        appliedAt:
+          type: string
+          format: date-time
+          description: 申し込んだ日時（世界標準時）
+          example: '2026-10-05T12:00:00Z'
+
+    Application:
+      type: object
+      description: 申込者一覧に表示する、1人分の情報
+      required: [user, status, waitlistPosition, appliedAt]
+      properties:
+        user:
+          $ref: '#/components/schemas/UserRef'
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        waitlistPosition:
+          type: ['integer', 'null']
+          description: キャンセル待ちの何番目か（1から始まる）。申込み済みのときは null
+          example: null
+        appliedAt:
+          type: string
+          format: date-time
+          description: 申し込んだ日時（世界標準時）
+          example: '2026-10-05T12:00:00Z'
+
+    ApplicationListResponse:
+      description: 申込者の一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Application'
+
+    # ---------- お知らせ ----------
+
+    NotificationType:
+      type: string
+      description: |
+        お知らせの種類（要件定義書 5.10）。画面は、種類ごとに表示する文を組み立てる。
+        - late_cancellation：締め切り後に、申込みがキャンセルされた（オーナーと運営スタッフあて）
+        - event_deleted：申し込んでいたイベントが削除された（申し込んでいた人あて）
+      enum: [late_cancellation, event_deleted]
+      example: late_cancellation
+
+    Notification:
+      type: object
+      description: |
+        お知らせ1件分の情報。
+        文章そのものではなく、種類と材料（イベントのタイトルなど）を返し、画面で文を組み立てる。
+        画面の文言を変えるときに、サーバーを直さずに済むようにするため。
+      required: [id, type, eventTitle, communityId, eventId, actor, read, createdAt]
+      properties:
+        id:
+          type: integer
+          description: お知らせの番号
+          example: 101
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        eventTitle:
+          type: string
+          description: |
+            出来事が起きた時点のイベントのタイトル。イベントが削除されたあとでも、何のイベントか分かるように残している
+          example: Java 初心者向け勉強会
+        communityId:
+          type: integer
+          description: イベントがあったコミュニティの番号
+          example: 3
+        eventId:
+          type: ['integer', 'null']
+          description: |
+            イベントの番号。お知らせを開いたときの移動先（イベント詳細）に使う。
+            イベントが削除された（event_deleted）ときは null（移動先がないため）
+          example: 5
+        actor:
+          description: |
+            出来事を起こした人。late_cancellation のときは、キャンセルした人（ニックネームだけ）。
+            event_deleted のときは null（削除したのはオーナーか運営スタッフで、名前は出さない）
+          oneOf:
+            - $ref: '#/components/schemas/UserRef'
+            - type: 'null'
+        read:
+          type: boolean
+          description: 既読かどうか
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          description: お知らせができた日時（世界標準時）
+          example: '2026-10-23T16:30:00Z'
+
+    NotificationListResponse:
+      description: お知らせの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items, unreadCount]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Notification'
+            unreadCount:
+              type: integer
+              description: 未読のお知らせの件数（このページだけでなく、全部の中で）
+              example: 2
+
+    UnreadNotificationCount:
+      type: object
+      description: 未読のお知らせの件数
+      required: [count]
+      properties:
+        count:
+          type: integer
+          description: 未読の件数
+          example: 2
+
+    # ---------- 一覧 ----------
+
+    PageInfo:
+      type: object
+      description: 一覧を返す API で、ページの切り替えに使う情報。一覧の返事は、この項目と items を持つ
+      required: [totalCount, page, pageSize, totalPages]
+      properties:
+        totalCount:
+          type: integer
+          description: 全部の件数
+          example: 42
+        page:
+          type: integer
+          description: 今のページ番号（1から始まる）
+          example: 1
+        pageSize:
+          type: integer
+          description: 1ページの件数（30）
+          example: 30
+        totalPages:
+          type: integer
+          description: 全部で何ページあるか
+          example: 2
+
+  # ---------- よく使う、エラーの返事 ----------
+  # 各 API の responses から $ref で参照する。返す code は API ごとに説明に書く
+  responses:
+    BadRequest:
+      description: 入力が正しくない（code は基本的に VALIDATION_ERROR。API によっては別の code を返す）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblem'
+    Unauthorized:
+      description: ログインしていない（code は UNAUTHENTICATED）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: 権限がない、または CSRF トークンが正しくない（code は FORBIDDEN または CSRF_TOKEN_INVALID）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: 見つからない（code は NOT_FOUND）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: 今の状態ではできない（code は API ごとの説明を参照）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: 試しすぎ（code は ACCOUNT_LOCKED など）
+      headers:
+        Retry-After:
+          description: あと何秒たてば、もう一度試せるか
+          schema:
+            type: integer
+            example: 900
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
