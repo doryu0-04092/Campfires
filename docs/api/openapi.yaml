@@ -59,10 +59,11 @@ paths:
   /api/auth/signup:
     post:
       operationId: signup
-      summary: アカウントを登録する（F-01）
+      summary: アカウントを登録する（F-01、F-18）
       description: |
         本名、ニックネーム、メールアドレス、パスワードを登録します。
-        プライバシーポリシーと利用規約への同意が必要です（要件定義書 5.7）。
+        プライバシーポリシーと利用規約への同意が必要です（F-18、要件定義書 5.7）。
+        プライバシーポリシーと利用規約のページ（S-13、S-14）は、画面に文章を書くだけなので、API はありません。
         サーバーは、同意した日時と、そのときの規約のバージョンを記録します。
         登録に成功すると、そのままログインした状態になります。
 
@@ -1029,6 +1030,101 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  # ==================== お知らせ（notifications） ====================
+
+  /api/notifications:
+    get:
+      operationId: listNotifications
+      summary: お知らせの一覧を取得する（F-20、S-15）
+      description: |
+        自分あてのお知らせを、新しい順に返します（要件定義書 5.10）。未読の件数も一緒に返します。
+      tags: [notifications]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/notifications/unread-count:
+    get:
+      operationId: getUnreadNotificationCount
+      summary: 未読のお知らせの件数を取得する（F-20）
+      description: |
+        画面上部に表示する、未読の件数だけを返します。
+        画面の移動のたびに呼ぶので、一覧を取るより軽い API として分けています。
+      tags: [notifications]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadNotificationCount'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/notifications/{notificationId}/read:
+    parameters:
+      - $ref: '#/components/parameters/NotificationId'
+
+    # 「既読になっている状態」を PUT で作る、と表す（アーカイブと同じ考え方）。何度呼んでも結果は同じ
+    put:
+      operationId: markNotificationAsRead
+      summary: お知らせを既読にする（F-20、S-15）
+      description: |
+        お知らせを1件、既読にします。すでに既読のときに呼んでも、成功（200）を返します。
+        他人あてのお知らせを指定したときは、存在しない場合と同じく 404 を返します
+        （他人あてのお知らせがあることを知られないようにするため）。
+      tags: [notifications]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '200':
+          description: 既読にした。既読にしたお知らせを返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/notifications/read-all:
+    # すべてのお知らせをまとめて既読にする操作は、作る・消すに当てはめにくいので、
+    # 例外として「操作の名前」を URL にして POST で呼ぶ（README 1.2）
+    post:
+      operationId: markAllNotificationsAsRead
+      summary: お知らせをすべて既読にする（F-20、S-15）
+      description: |
+        自分あてのお知らせを、すべて既読にします。未読がないときに呼んでも、成功（204）を返します。
+      tags: [notifications]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: すべて既読にした
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 # 何度も使う部品。各 API からは $ref で参照する
 components:
 
@@ -1085,6 +1181,14 @@ components:
       in: path
       required: true
       description: ユーザーの番号
+      schema:
+        type: integer
+        minimum: 1
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      description: お知らせの番号
       schema:
         type: integer
         minimum: 1
@@ -1737,6 +1841,89 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Application'
+
+    # ---------- お知らせ ----------
+
+    NotificationType:
+      type: string
+      description: |
+        お知らせの種類（要件定義書 5.10）。画面は、種類ごとに表示する文を組み立てる。
+        - late_cancellation：締め切り後に、申込みがキャンセルされた（オーナーと運営スタッフあて）
+        - event_deleted：申し込んでいたイベントが削除された（申し込んでいた人あて）
+      enum: [late_cancellation, event_deleted]
+      example: late_cancellation
+
+    Notification:
+      type: object
+      description: |
+        お知らせ1件分の情報。
+        文章そのものではなく、種類と材料（イベントのタイトルなど）を返し、画面で文を組み立てる。
+        画面の文言を変えるときに、サーバーを直さずに済むようにするため。
+      required: [id, type, eventTitle, communityId, eventId, actor, read, createdAt]
+      properties:
+        id:
+          type: integer
+          description: お知らせの番号
+          example: 101
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        eventTitle:
+          type: string
+          description: |
+            出来事が起きた時点のイベントのタイトル。イベントが削除されたあとでも、何のイベントか分かるように残している
+          example: Java 初心者向け勉強会
+        communityId:
+          type: integer
+          description: イベントがあったコミュニティの番号
+          example: 3
+        eventId:
+          type: ['integer', 'null']
+          description: |
+            イベントの番号。お知らせを開いたときの移動先（イベント詳細）に使う。
+            イベントが削除された（event_deleted）ときは null（移動先がないため）
+          example: 5
+        actor:
+          description: |
+            出来事を起こした人。late_cancellation のときは、キャンセルした人（ニックネームだけ）。
+            event_deleted のときは null（削除したのはオーナーか運営スタッフで、名前は出さない）
+          oneOf:
+            - $ref: '#/components/schemas/UserRef'
+            - type: 'null'
+        read:
+          type: boolean
+          description: 既読かどうか
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          description: お知らせができた日時（世界標準時）
+          example: '2026-10-23T16:30:00Z'
+
+    NotificationListResponse:
+      description: お知らせの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items, unreadCount]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Notification'
+            unreadCount:
+              type: integer
+              description: 未読のお知らせの件数（このページだけでなく、全部の中で）
+              example: 2
+
+    UnreadNotificationCount:
+      type: object
+      description: 未読のお知らせの件数
+      required: [count]
+      properties:
+        count:
+          type: integer
+          description: 未読の件数
+          example: 2
 
     # ---------- 一覧 ----------
 
