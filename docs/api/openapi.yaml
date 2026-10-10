@@ -36,8 +36,207 @@ tags:
   - name: notifications
     description: お知らせ
 
-# ★ API の一覧。分野ごとに、次の段階から追加していく
-paths: {}
+# ★ API の一覧。分野ごとにまとめて並べる
+paths:
+
+  # ==================== アカウント登録、ログイン、ログアウト（auth） ====================
+
+  /api/auth/csrf:
+    get:
+      operationId: getCsrfToken
+      summary: CSRF トークンを受け取る
+      description: |
+        画面を開いたときに最初に呼びます。サーバーは XSRF-TOKEN という Cookie に、CSRF の対策の合言葉を入れて返します。
+        画面は、データを変える API を呼ぶとき、この値を X-XSRF-TOKEN ヘッダーに入れて送ります（README 1.7）。
+        ログインしていなくても呼べます。
+      tags: [auth]
+      # security: [] は「ログインも CSRF トークンも要らない」という意味
+      security: []
+      responses:
+        '204':
+          description: 成功。XSRF-TOKEN の Cookie を返す（返事の中身はなし）
+
+  /api/auth/signup:
+    post:
+      operationId: signup
+      summary: アカウントを登録する（F-01）
+      description: |
+        本名、ニックネーム、メールアドレス、パスワードを登録します。
+        プライバシーポリシーと利用規約への同意が必要です（要件定義書 5.7）。
+        サーバーは、同意した日時と、そのときの規約のバージョンを記録します。
+        登録に成功すると、そのままログインした状態になります。
+
+        返す code
+        - VALIDATION_ERROR（400）：入力が正しくない、または同意していない
+        - EMAIL_ALREADY_REGISTERED（409）：そのメールアドレスはすでに登録されている
+      tags: [auth]
+      # ログインは不要だが、CSRF トークンは必要
+      security:
+        - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: 登録に成功し、ログインした状態になった。セッション ID の Cookie を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/auth/login:
+    post:
+      operationId: login
+      summary: ログインする（F-02）
+      description: |
+        メールアドレスとパスワードでログインします。
+        成功すると、セッション ID を新しく作り直して Cookie で返します（ログインの前に渡していた ID を使い回さない。セッション固定攻撃の対策）。
+
+        5回続けて失敗すると、そのアカウントは15分間ログインできなくなります（非機能要件 3章）。
+
+        返す code
+        - VALIDATION_ERROR（400）：メールアドレスかパスワードが空
+        - INVALID_CREDENTIALS（401）：メールアドレスかパスワードが違う。
+          どちらが違うかは教えない（登録されているメールアドレスを探られないようにするため）
+        - ACCOUNT_LOCKED（429）：失敗が続いたため、ロックされている
+      tags: [auth]
+      security:
+        - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: ログインに成功した。セッション ID の Cookie を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/auth/logout:
+    post:
+      operationId: logout
+      summary: ログアウトする（F-02）
+      description: |
+        サーバーのセッションを消し、セッション ID の Cookie も消します。
+        ログインしていない状態で呼んでも、成功（204）を返します。
+      tags: [auth]
+      security:
+        - csrfToken: []
+      responses:
+        '204':
+          description: ログアウトした
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ==================== 自分のアカウント（account） ====================
+
+  /api/me:
+    get:
+      operationId: getMe
+      summary: 自分のアカウントの情報を取得する（S-12）
+      description: |
+        ログインしている自分の情報を返します。本名とメールアドレスを返すのは、この API だけです（README 1.9）。
+        画面は、起動したときにこの API を呼んで、ログインしているかどうかを判断します（401 ならログインしていない）。
+      tags: [account]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      operationId: updateMe
+      summary: ニックネームを変更する（F-21）
+      description: |
+        自分のニックネームを変えます。本名とメールアドレスは変えられません（問い合わせで対応する。要件定義書 4.3）。
+        変えると、過去の申込みの記録を含めて、すべての画面で新しいニックネームが表示されます。
+      tags: [account]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+      responses:
+        '200':
+          description: 変更した。変更後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      operationId: deleteMe
+      summary: アカウントを削除する（F-17）
+      description: |
+        自分のアカウントを削除します。本人の操作であることを確かめるため、パスワードをもう一度送ってもらいます。
+        要件定義書 5.5 のとおりに処理します。
+        - 参加しているすべてのコミュニティから退会し、開催前のイベントへの申込みをすべてキャンセルする
+        - 本名、ニックネーム、メールアドレス、パスワードの情報を消す
+        - 過去の申込みの記録は残し、申込者は「退会したユーザー」として表示する
+        - セッションを消し、ログアウトした状態にする
+
+        返す code
+        - VALIDATION_ERROR（400）：パスワードが空
+        - INVALID_PASSWORD（400）：パスワードが違う。errors に password の項目を入れて返す
+        - OWNS_COMMUNITIES（409）：オーナーをしているコミュニティがある。先にコミュニティを削除する必要がある
+      tags: [account]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteMeRequest'
+      responses:
+        '204':
+          description: 削除した
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
 # 何度も使う部品。各 API からは $ref で参照する
 components:
@@ -158,6 +357,118 @@ components:
           description: 利用者に見せる、日本語の説明
           example: タイトルを入力してください。
 
+    # ---------- アカウント ----------
+
+    Me:
+      type: object
+      description: |
+        ログインしている自分の情報。本名とメールアドレスを含むので、本人にだけ返す（README 1.9）。
+      required: [id, realName, nickname, email, createdAt]
+      properties:
+        id:
+          type: integer
+          description: ユーザーの番号
+          example: 12
+        realName:
+          type: string
+          description: 本名。本人と管理者だけが見られる
+          example: 山田 太郎
+        nickname:
+          type: string
+          description: ニックネーム。ほかのユーザーに表示される名前
+          example: たろう
+        email:
+          type: string
+          format: email
+          description: メールアドレス。本人と管理者だけが見られる
+          example: taro@example.com
+        createdAt:
+          type: string
+          format: date-time
+          description: 登録した日時（世界標準時）
+          example: '2026-10-01T03:00:00Z'
+
+    SignupRequest:
+      type: object
+      description: アカウント登録のときに送るデータ
+      required: [realName, nickname, email, password, agreedToPolicies]
+      properties:
+        realName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: 本名。1〜50文字
+          example: 山田 太郎
+        nickname:
+          $ref: '#/components/schemas/Nickname'
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: メールアドレス。254文字まで。ほかのアカウントと同じものは使えない
+          example: taro@example.com
+        password:
+          $ref: '#/components/schemas/Password'
+        agreedToPolicies:
+          type: boolean
+          # const: true は「true 以外は受け付けない」という意味
+          const: true
+          description: プライバシーポリシーと利用規約に同意したか。true でなければ登録できない
+          example: true
+
+    LoginRequest:
+      type: object
+      description: ログインのときに送るデータ
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          description: メールアドレス
+          example: taro@example.com
+        password:
+          type: string
+          description: パスワード
+          example: campfire2026
+
+    UpdateMeRequest:
+      type: object
+      description: ニックネームを変えるときに送るデータ
+      required: [nickname]
+      properties:
+        nickname:
+          $ref: '#/components/schemas/Nickname'
+
+    DeleteMeRequest:
+      type: object
+      description: アカウントを削除するときに送るデータ。本人の確認のため、パスワードを送る
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: 今のパスワード
+          example: campfire2026
+
+    Nickname:
+      type: string
+      minLength: 1
+      maxLength: 30
+      description: ニックネーム。1〜30文字。ほかのユーザーと同じでもよい
+      example: たろう
+
+    Password:
+      type: string
+      minLength: 8
+      maxLength: 64
+      # pattern：使える文字のルール（正規表現）。半角の英数字と記号だけを許す
+      pattern: '^[\x21-\x7E]+$'
+      description: |
+        パスワード。8〜64文字。使える文字は、半角の英字、数字、記号だけ（空白は使えない）。
+        パスワードの保存に使う BCrypt は先頭の 72バイトしか使わないため、
+        1文字が1バイトになる半角の文字に限っている。
+      example: campfire2026
+
+    # ---------- 一覧 ----------
+
     PageInfo:
       type: object
       description: 一覧を返す API で、ページの切り替えに使う情報。一覧の返事は、この項目と items を持つ
@@ -184,7 +495,7 @@ components:
   # 各 API の responses から $ref で参照する。返す code は API ごとに説明に書く
   responses:
     BadRequest:
-      description: 入力が正しくない（code は VALIDATION_ERROR）
+      description: 入力が正しくない（code は基本的に VALIDATION_ERROR。API によっては別の code を返す）
       content:
         application/problem+json:
           schema:
@@ -209,6 +520,18 @@ components:
             $ref: '#/components/schemas/Problem'
     Conflict:
       description: 今の状態ではできない（code は API ごとの説明を参照）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequests:
+      description: 試しすぎ（code は ACCOUNT_LOCKED など）
+      headers:
+        Retry-After:
+          description: あと何秒たてば、もう一度試せるか
+          schema:
+            type: integer
+            example: 900
       content:
         application/problem+json:
           schema:
