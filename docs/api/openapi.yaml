@@ -702,6 +702,333 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  # ==================== イベント（events） ====================
+
+  /api/events:
+    get:
+      operationId: searchEvents
+      summary: イベントの一覧・検索（F-22、S-01）
+      description: |
+        開催前のイベントを返します。ログインしていなくても呼べます。要件定義書 5.8 のとおりに動きます。
+        - q がないとき：作成日時の新しい順
+        - q があるとき：タイトルと説明に単語を含むイベントを、当てはまった単語の数が多い順（同じなら作成日時の新しい順）
+        - 単語は空白（半角・全角）で区切る。英字の大文字と小文字は区別しない。100文字、5語まで使う
+        - 1ページ 30件。検索しているときは 300件までで、超えたら limitExceeded を true にする
+        - アーカイブ中のコミュニティのイベントも含める（要件定義書 5.9）
+        - page が数でない、または 1 より小さいときは、1 として扱う
+      tags: [events]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: 検索する単語（空白で区切って複数入れられる）。なければ検索しない
+          schema:
+            type: string
+            maxLength: 100
+          example: Java 初心者
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListResponse'
+
+  /api/communities/{communityId}/events:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+
+    get:
+      operationId: listCommunityEvents
+      summary: コミュニティのイベントの一覧を取得する（F-11、S-05）
+      description: |
+        1つのコミュニティのイベントを返します。ログインしていなくても呼べます。
+        終了したイベントは、トップのイベント一覧には出さないので、ここで見られるようにしています（要件定義書 5.8）。
+        - status=upcoming（初期値）：開催前のイベントを、開始日時の近い順
+        - status=past：終了したイベントを、開始日時の新しい順
+      tags: [events]
+      security: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: upcoming（開催前）か past（終了済み）
+          schema:
+            type: string
+            enum: [upcoming, past]
+            default: upcoming
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityEventListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      operationId: createEvent
+      summary: イベントを作成する（F-10、S-08）
+      description: |
+        コミュニティにイベントを作ります。オーナーと運営スタッフだけができます。
+        入力のルール（EventInput の説明も参照）
+        - 開始日時は、今より後
+        - 終了日時は、開始日時より後
+        - 申込み締め切り日時は、開始日時より前（要件定義書 5.2）
+
+        返す code
+        - VALIDATION_ERROR（400）：入力が正しくない（日時の前後関係を含む）
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+        - COMMUNITY_ARCHIVED（409）：アーカイブ中のコミュニティには作れない（要件定義書 5.9）
+      tags: [events]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventInput'
+      responses:
+        '201':
+          description: 作成した。作ったイベントを返す
+          headers:
+            Location:
+              description: 作ったイベントの API の URL
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/events/{eventId}:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/EventId'
+
+    get:
+      operationId: getEvent
+      summary: イベントの詳細を取得する（F-11、S-09）
+      description: |
+        イベントの情報を返します。ログインしていなくても呼べます。
+        ログインしている場合は、自分の申込みの状況と、コミュニティでの自分の立場も返します。
+        イベントが、指定したコミュニティのものでないときは 404 を返します。
+      tags: [events]
+      security:
+        - {}
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      operationId: updateEvent
+      summary: イベントを編集する（F-10、S-10）
+      description: |
+        イベントの内容を変えます。オーナーと運営スタッフだけができます。
+        コミュニティがアーカイブ中でも編集できます（要件定義書 5.9）。
+        編集の画面は、変えていない項目も含めて、すべての項目を送ります。
+
+        入力のルールは作成と同じです。加えて、次のルールがあります。
+        - 定員を、今の申込み済みの人数より少なくできない（要件定義書 5.2）
+        - 終了したイベントは編集できない
+        - 締め切り前に定員を増やしたときは、増えた分だけキャンセル待ちの人を繰り上げる
+
+        返す code
+        - VALIDATION_ERROR（400）：入力が正しくない
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+        - CAPACITY_BELOW_APPLIED（409）：定員が、今の申込み済みの人数より少ない
+        - EVENT_ENDED（409）：終了したイベント
+      tags: [events]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventInput'
+      responses:
+        '200':
+          description: 変更した。変更後の情報を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      operationId: deleteEvent
+      summary: イベントを削除する（F-10、S-10）
+      description: |
+        開催前のイベントを削除します。オーナーと運営スタッフだけができます。
+        申込み（キャンセル待ちを含む）も一緒に削除し、申し込んでいた人にお知らせを送ります（F-20、要件定義書 5.10）。
+        終了したイベントは、参加の記録として残すため、削除できません。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+        - EVENT_ENDED（409）：終了したイベント
+      tags: [events]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: 削除した
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ==================== イベントへの申込み（applications） ====================
+
+  /api/communities/{communityId}/events/{eventId}/applications:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/EventId'
+
+    get:
+      operationId: listApplications
+      summary: 申込者の一覧を取得する（F-13、S-11）
+      description: |
+        イベントの申込者を返します。オーナーと運営スタッフだけができます。
+        返す名前はニックネームだけで、本名は返しません（要件定義書 5.6）。
+        アカウントを削除した人は、ニックネームが null になります。
+        並び順：申込み済みの人を申し込んだ日時の古い順、そのあとにキャンセル待ちの人を順番どおりに並べる。
+        キャンセルした人は含めません。終了したイベントでも見られます。
+
+        返す code
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+      tags: [applications]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      operationId: applyToEvent
+      summary: イベントに申し込む（F-12、F-14、F-15、S-09）
+      description: |
+        自分を、このイベントに申し込みます。そのコミュニティのメンバー（オーナー、運営スタッフを含む）だけができます。
+        - 空きがあれば「申込み済み」（applied）になる
+        - 満席なら「キャンセル待ち」（waitlisted）になる（F-15。MVP の後半で作る。それまでは EVENT_FULL を返す）
+        - 残り1枠に何人が同時に申し込んでも、定員を超えないようにする（F-14）
+
+        返す code
+        - NOT_MEMBER（403）：コミュニティのメンバーではない
+        - ALREADY_APPLIED（409）：すでに申し込んでいる（キャンセル待ちを含む）
+        - APPLICATION_DEADLINE_PASSED（409）：申込み締め切り日時を過ぎている
+        - EVENT_FULL（409）：満席（キャンセル待ちを作るまでの間だけ使う）
+      tags: [applications]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '201':
+          description: 申し込んだ。申込みの状況を返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyApplication'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/events/{eventId}/my-application:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/EventId'
+
+    delete:
+      operationId: cancelMyApplication
+      summary: 自分の申込みをキャンセルする（F-12、F-16、F-20、S-09）
+      description: |
+        自分の申込み（キャンセル待ちを含む）を取り消します。
+        URL を /applications/{番号} ではなく /my-application（自分の申込み）にしているのは、
+        他人の申込みを取り消せないことを、URL の段階ではっきりさせるため。
+
+        締め切り日時の前と後で、動きが変わります（要件定義書 5.2、5.3）。
+        - 締め切り前：取り消す。申込み済みの人が取り消したときは、キャンセル待ちの先頭の人を繰り上げる（F-16）
+        - 締め切り後：取り消す。繰り上げは行わない。オーナーと運営スタッフにお知らせを送る（F-20、要件定義書 5.10）。
+          画面は、呼ぶ前に「原則としてキャンセルはできません」という確認を出す
+
+        返す code
+        - NOT_APPLIED（409）：申し込んでいない
+        - EVENT_ENDED（409）：終了したイベント
+      tags: [applications]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        '204':
+          description: 取り消した
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
 # 何度も使う部品。各 API からは $ref で参照する
 components:
 
@@ -1189,6 +1516,227 @@ components:
           description: staff（運営スタッフにする）か member（メンバーに戻す）。owner は送れない
           enum: [staff, member]
           example: staff
+
+    # ---------- イベント ----------
+    # EventSummary と EventListResponse は、frontend/src/types/event.ts と同じ形にしている
+
+    EventSummary:
+      type: object
+      description: イベントの一覧に表示する、1件分の情報
+      required: [id, communityId, communityName, title, startAt, endAt, capacity, remainingSeats]
+      properties:
+        id:
+          type: integer
+          description: イベントの番号
+          example: 5
+        communityId:
+          type: integer
+          description: どのコミュニティのイベントか（コミュニティの番号）
+          example: 3
+        communityName:
+          type: string
+          description: コミュニティの名前
+          example: Java 勉強会 東京
+        title:
+          type: string
+          description: イベントのタイトル
+          example: Java 初心者向け勉強会
+        startAt:
+          type: string
+          format: date-time
+          description: 開始日時（世界標準時）
+          example: '2026-10-24T05:00:00Z'
+        endAt:
+          type: string
+          format: date-time
+          description: 終了日時（世界標準時）
+          example: '2026-10-24T07:00:00Z'
+        capacity:
+          type: integer
+          description: 定員
+          example: 30
+        remainingSeats:
+          type: integer
+          description: 残りの枠数（0 なら満席）
+          example: 5
+
+    EventListResponse:
+      description: イベントの一覧・検索の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items, limitExceeded]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventSummary'
+            limitExceeded:
+              type: boolean
+              description: 検索結果が 300件を超えたかどうか（超えたら true。totalCount は 300 になる）
+              example: false
+
+    CommunityEventListResponse:
+      description: コミュニティのイベントの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventSummary'
+
+    EventInput:
+      type: object
+      description: |
+        イベントを作成・編集するときに送るデータ。
+        日時の前後関係のルール：今 < 開始日時、申込み締め切り日時 < 開始日時 < 終了日時
+      required: [title, description, startAt, endAt, applicationDeadline, location, capacity]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: タイトル。1〜100文字
+          example: Java 初心者向け勉強会
+        description:
+          type: string
+          maxLength: 5000
+          description: 説明。5000文字まで（空でもよい）。検索の対象になる
+          example: 週末の午後に、みんなで手を動かしながら学びます。
+        startAt:
+          type: string
+          format: date-time
+          description: 開始日時（世界標準時）
+          example: '2026-10-24T05:00:00Z'
+        endAt:
+          type: string
+          format: date-time
+          description: 終了日時（世界標準時）
+          example: '2026-10-24T07:00:00Z'
+        applicationDeadline:
+          type: string
+          format: date-time
+          description: 申込み締め切り日時（世界標準時）。キャンセルの期限も兼ねる（要件定義書 5.2）
+          example: '2026-10-23T15:00:00Z'
+        location:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: |
+            場所。1〜200文字。誰でも見られるので、個人の住所は書かない（画面で注意書きを出す。要件定義書 5.2）
+          example: 渋谷区の貸し会議室（詳細は申込み後にお知らせします）
+        capacity:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: 定員。1〜1000人
+          example: 30
+
+    EventDetail:
+      description: イベントの詳細。一覧の情報に、説明、場所、締め切り、自分との関係などを足したもの
+      allOf:
+        - $ref: '#/components/schemas/EventSummary'
+        - type: object
+          required: [description, location, applicationDeadline, waitlistCount, communityArchivedAt, myRole, myApplication, createdAt]
+          properties:
+            description:
+              type: string
+              description: 説明
+              example: 週末の午後に、みんなで手を動かしながら学びます。
+            location:
+              type: string
+              description: 場所
+              example: 渋谷区の貸し会議室（詳細は申込み後にお知らせします）
+            applicationDeadline:
+              type: string
+              format: date-time
+              description: 申込み締め切り日時（世界標準時）
+              example: '2026-10-23T15:00:00Z'
+            waitlistCount:
+              type: integer
+              description: キャンセル待ちの人数
+              example: 0
+            communityArchivedAt:
+              $ref: '#/components/schemas/ArchivedAt'
+            myRole:
+              description: |
+                コミュニティでの自分の立場。メンバーでない、またはログインしていないときは null。
+                画面は、これを見て「申し込む」ボタン（メンバーだけ）や、管理画面へのリンク（オーナー、運営スタッフ）を出し分ける
+              oneOf:
+                - $ref: '#/components/schemas/CommunityRole'
+                - type: 'null'
+            myApplication:
+              description: 自分の申込みの状況。申し込んでいない、またはログインしていないときは null
+              oneOf:
+                - $ref: '#/components/schemas/MyApplication'
+                - type: 'null'
+            createdAt:
+              type: string
+              format: date-time
+              description: 作成した日時（世界標準時）
+              example: '2026-10-01T03:00:00Z'
+
+    # ---------- イベントへの申込み ----------
+
+    ApplicationStatus:
+      type: string
+      description: |
+        申込みの状態。
+        - applied：申込み済み
+        - waitlisted：キャンセル待ち
+      enum: [applied, waitlisted]
+      example: applied
+
+    MyApplication:
+      type: object
+      description: 自分の申込みの状況
+      required: [status, waitlistPosition, appliedAt]
+      properties:
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        waitlistPosition:
+          type: ['integer', 'null']
+          description: キャンセル待ちの何番目か（1から始まる）。申込み済みのときは null
+          example: null
+        appliedAt:
+          type: string
+          format: date-time
+          description: 申し込んだ日時（世界標準時）
+          example: '2026-10-05T12:00:00Z'
+
+    Application:
+      type: object
+      description: 申込者一覧に表示する、1人分の情報
+      required: [user, status, waitlistPosition, appliedAt]
+      properties:
+        user:
+          $ref: '#/components/schemas/UserRef'
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        waitlistPosition:
+          type: ['integer', 'null']
+          description: キャンセル待ちの何番目か（1から始まる）。申込み済みのときは null
+          example: null
+        appliedAt:
+          type: string
+          format: date-time
+          description: 申し込んだ日時（世界標準時）
+          example: '2026-10-05T12:00:00Z'
+
+    ApplicationListResponse:
+      description: 申込者の一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Application'
 
     # ---------- 一覧 ----------
 
