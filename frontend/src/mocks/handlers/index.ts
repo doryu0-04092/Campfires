@@ -5,8 +5,9 @@
  * 本物の API ができたら、同じ URL・同じ形の返事を、Spring Boot が返すことになる。
  */
 
+import { accountHandlers } from './account'
 import { authHandlers } from './auth'
 import { eventHandlers } from './events'
 
-// ... は「一覧の中身を、ここに並べる」という書き方。2つの一覧をつなげて1つにしている
-export const handlers = [...authHandlers, ...eventHandlers]
+// ... は「一覧の中身を、ここに並べる」という書き方。分野ごとの一覧をつなげて1つにしている
+export const handlers = [...authHandlers, ...accountHandlers, ...eventHandlers]

@@ -15,6 +15,11 @@ export type MockUser = {
   // パスワード。偽物なので、そのまま保存している。
   // 本物のバックエンドでは、BCrypt で変換した値だけを保存する（非機能要件 3章）
   password: string
+  // プライバシーポリシーと利用規約に同意した日時（要件定義書 5.7、法的な論点のメモ）
+  policiesAgreedAt: string
+  // アカウントを削除した日時。削除していなければ null。
+  // 削除したときは、本名、ニックネーム、メールアドレス、パスワードを空にし、行だけを残す（要件定義書 5.5）
+  deletedAt: string | null
   createdAt: string
 }
 
@@ -25,7 +30,7 @@ export const MOCK_PASSWORD = 'campfire2026'
  * 【何のため】動作確認に使う、立場の違うユーザー。
  * README の「開発用のアカウント」に、同じ内容を書いている。
  */
-const demoUsers: Omit<MockUser, 'createdAt'>[] = [
+const demoUsers: Omit<MockUser, 'policiesAgreedAt' | 'deletedAt' | 'createdAt'>[] = [
   // Omit<型, '項目'> は「その型から、指定した項目を除いた形」という意味
   { id: 1, realName: '山田 太郎', nickname: 'たろう', email: 'owner@example.com', password: MOCK_PASSWORD },
   { id: 2, realName: '佐藤 花子', nickname: 'はなこ', email: 'staff@example.com', password: MOCK_PASSWORD },
@@ -42,23 +47,29 @@ export const FIRST_DUMMY_USER_ID = 5
  * 【何のため】ユーザーの表の最初のデータを作る。
  */
 export function createUsers(now: number): MockUser[] {
+  const demoCreatedAt = new Date(now - 100 * 24 * 60 * 60 * 1000).toISOString()
   const users: MockUser[] = demoUsers.map((user) => ({
     // ...user は「user の項目をすべてここに並べる」という書き方
     ...user,
-    createdAt: new Date(now - 100 * 24 * 60 * 60 * 1000).toISOString(),
+    policiesAgreedAt: demoCreatedAt,
+    deletedAt: null,
+    createdAt: demoCreatedAt,
   }))
 
   // 参加者01〜参加者40 を作る
   for (let i = 0; i < DUMMY_USER_COUNT; i++) {
     // padStart(2, '0') は、1桁の数の前に 0 を付けて2桁にする（例：1 → "01"）
     const number = String(i + 1).padStart(2, '0')
+    const createdAt = new Date(now - (90 - i) * 24 * 60 * 60 * 1000).toISOString()
     users.push({
       id: FIRST_DUMMY_USER_ID + i,
       realName: `参加者 ${number}`,
       nickname: `参加者${number}`,
       email: `user${number}@example.com`,
       password: MOCK_PASSWORD,
-      createdAt: new Date(now - (90 - i) * 24 * 60 * 60 * 1000).toISOString(),
+      policiesAgreedAt: createdAt,
+      deletedAt: null,
+      createdAt,
     })
   }
 
