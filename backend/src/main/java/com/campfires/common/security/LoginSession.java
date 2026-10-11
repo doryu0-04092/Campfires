@@ -11,6 +11,8 @@ import org.springframework.security.web.authentication.logout.SecurityContextLog
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Component;
 
+import com.campfires.common.observability.AccessLogFilter;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -51,6 +53,8 @@ public class LoginSession {
         // 今の処理の中でもログインした状態にし、次の API の呼び出しのために、セッションにも保存する
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, request, response);
+        // アクセスログ（AccessLogFilter）に、ログインした人の番号を残すため
+        request.setAttribute(AccessLogFilter.USER_ID_ATTRIBUTE, userId);
     }
 
     /**

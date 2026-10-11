@@ -1,0 +1,6 @@
+# 【役割】E2E テストのフォルダで、Git に入れないもの。
+# 【なぜ必要か】部品と、テストの結果、テストの利用者の情報（パスワードとログインの Cookie）を、リポジトリに入れないため
+node_modules/
+.auth*/
+test-results/
+playwright-report/
