@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  【役割】お知らせ（notifications テーブル）の SQL（NotificationMapper.java のメソッドと、id の名前で結び付く）。
+  【なぜ必要か】お知らせを作るルール（要件定義書 5.10）を、SQL で行うため。
+-->
+<mapper namespace="com.campfires.notification.NotificationMapper">
+
+    <!--
+      INSERT … SELECT：SELECT で見つけた行の数だけ、まとめて登録する。
+      ここでは、イベントのコミュニティのオーナーと運営スタッフ（操作した人を除く）の人数分、お知らせを作る。
+      イベントのタイトルは、今の時点のものを残す（イベントが削除されても、何のイベントか分かるように）
+    -->
+    <insert id="insertLateCancellation">
+        INSERT INTO notifications (user_id, type, event_title, community_id, event_id, actor_user_id)
+        SELECT m.user_id, 'late_cancellation', e.title, e.community_id, e.id, #{actorUserId}
+        FROM events e
+        JOIN memberships m ON m.community_id = e.community_id
+        WHERE e.id = #{eventId}
+          AND m.role IN ('owner', 'staff')
+          AND m.user_id &lt;&gt; #{operatorUserId}
+    </insert>
+</mapper>

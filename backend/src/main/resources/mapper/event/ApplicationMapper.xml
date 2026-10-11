@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  【役割】申込み（applications テーブル）の SQL（ApplicationMapper.java のメソッドと、id の名前で結び付く）。
+  【なぜ必要か】申込みの取り消しと繰り上げのルール（要件定義書 5.3）を、SQL で行うため。
+-->
+<mapper namespace="com.campfires.event.ApplicationMapper">
+
+    <!-- <if> は、条件に合うときだけ SQL を足す書き方（communityId が指定されたときだけ、コミュニティで絞る） -->
+    <select id="findUpcomingEventIdsOfUser" resultType="long">
+        SELECT a.event_id FROM applications a
+        JOIN events e ON e.id = a.event_id
+        WHERE a.user_id = #{userId} AND e.end_at > now()
+        <if test="communityId != null">
+            AND e.community_id = #{communityId}
+        </if>
+        ORDER BY a.event_id
+    </select>
+
+    <select id="lockEvent" resultType="long">
+        SELECT id FROM events WHERE id = #{eventId} FOR UPDATE
+    </select>
+
+    <!-- 列と、CancelTarget（record）の項目を結び付ける -->
+    <resultMap id="cancelTarget" type="com.campfires.event.CancelTarget">
+        <constructor>
+            <idArg column="application_id" name="applicationId" javaType="_long"/>
+            <arg column="event_id" name="eventId" javaType="_long"/>
+            <arg column="user_id" name="userId" javaType="_long"/>
+            <arg column="status" name="status" javaType="String"/>
+            <arg column="deadline_passed" name="deadlinePassed" javaType="_boolean"/>
+        </constructor>
+    </resultMap>
+
+    <!-- 締め切りを過ぎているかは、データベースの今の日時（now()）で判断する -->
+    <select id="findCancelTarget" resultMap="cancelTarget">
+        SELECT a.id AS application_id, a.event_id, a.user_id, a.status,
+               e.application_deadline &lt;= now() AS deadline_passed
+        FROM applications a
+        JOIN events e ON e.id = a.event_id
+        WHERE a.event_id = #{eventId} AND a.user_id = #{userId}
+    </select>
+
+    <delete id="delete">
+        DELETE FROM applications WHERE id = #{applicationId}
+    </delete>
+
+    <!--
+      繰り上げる人数 = 定員 - 申込み済みの人数（マイナスにならないよう GREATEST で 0 以上にする）。
+      キャンセル待ちを、申し込んだ順（同じ日時なら番号の順）に並べて、その人数だけ applied に変える。
+      締め切りを過ぎたイベントでは、繰り上げない（最後の条件）
+    -->
+    <update id="promoteWaitlist">
+        UPDATE applications SET status = 'applied'
+        WHERE id IN (
+            SELECT w.id FROM applications w
+            WHERE w.event_id = #{eventId} AND w.status = 'waitlisted'
+            ORDER BY w.applied_at, w.id
+            LIMIT GREATEST(
+                (SELECT capacity FROM events WHERE id = #{eventId})
+                - (SELECT count(*) FROM applications WHERE event_id = #{eventId} AND status = 'applied'),
+                0)
+        )
+        AND (SELECT application_deadline FROM events WHERE id = #{eventId}) > now()
+    </update>
+</mapper>

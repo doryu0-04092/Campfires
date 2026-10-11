@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  【役割】ログインの失敗の記録（login_failures テーブル）の SQL（LoginFailureMapper.java と、id の名前で結び付く）。
+  【なぜ必要か】ログインの試行制限（非機能要件 3章）のため。日時は、データベースの今の日時（now()）で判断する。
+-->
+<mapper namespace="com.campfires.auth.LoginFailureMapper">
+
+    <resultMap id="loginLock" type="com.campfires.auth.LoginLock">
+        <constructor>
+            <arg column="locked" name="locked" javaType="_boolean"/>
+            <arg column="retry_after_seconds" name="retryAfterSeconds" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <!--
+      locked：ロックが解ける日時が、今より後なら true。
+      retry_after_seconds：ロックが解けるまでの秒数。EXTRACT(EPOCH FROM 時間の差) で秒に変え、CEIL で切り上げる。
+      COALESCE は「最初の、NULL でない値」を返す（ロックしていなければ 0）
+    -->
+    <select id="findLock" resultMap="loginLock">
+        SELECT COALESCE(locked_until > now(), false) AS locked,
+               COALESCE(CEIL(EXTRACT(EPOCH FROM (locked_until - now()))), 0)::bigint AS retry_after_seconds
+        FROM login_failures
+        WHERE email = #{email}
+    </select>
+
+    <!--
+      INSERT … ON CONFLICT … DO UPDATE：行がなければ登録し、すでにあれば書き換える（1つの SQL で行うので、
+      同時に失敗しても回数がずれない）。DO UPDATE の中の login_failures.〜 は、書き換える前の値。
+      - 前のロックが解けた後（locked_until が入っている）なら、1回目から数え直す
+      - 数えた回数が maxFailures に達したら、今から lockMinutes 分だけロックする
+    -->
+    <insert id="recordFailure">
+        INSERT INTO login_failures (email, failure_count, locked_until, updated_at)
+        VALUES (
+            #{email},
+            1,
+            CASE WHEN 1 >= #{maxFailures} THEN now() + make_interval(mins => #{lockMinutes}) END,
+            now()
+        )
+        ON CONFLICT (email) DO UPDATE SET
+            failure_count = CASE WHEN login_failures.locked_until IS NULL THEN login_failures.failure_count + 1 ELSE 1 END,
+            locked_until = CASE
+                WHEN (CASE WHEN login_failures.locked_until IS NULL THEN login_failures.failure_count + 1 ELSE 1 END) >= #{maxFailures}
+                THEN now() + make_interval(mins => #{lockMinutes})
+            END,
+            updated_at = now()
+    </insert>
+
+    <delete id="clear">
+        DELETE FROM login_failures WHERE email = #{email}
+    </delete>
+</mapper>
