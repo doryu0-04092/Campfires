@@ -1,13 +1,16 @@
 package com.campfires.notification;
 
+import java.util.List;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 /**
  * 【役割】お知らせ（notifications テーブル）の SQL の窓口。
- * 【なぜ必要か】ほかの機能（申込みの取り消し、イベントの削除）から、お知らせを作るため。
+ * 【なぜ必要か】ほかの機能（申込みの取り消し、イベントの削除）からお知らせを作り、
+ * お知らせの API で、一覧を返したり、既読にしたりするため。
  * SQL の本文は src/main/resources/mapper/notification/NotificationMapper.xml。
- * お知らせの API を作るときに、ここへメソッドを足していく。
+ * どのメソッドも userId（ログインしている人）で絞り、他人あてのお知らせには触れない。
  */
 @Mapper
 public interface NotificationMapper {
@@ -28,4 +31,35 @@ public interface NotificationMapper {
      * @param operatorUserId 削除の操作をした人。この人にはお知らせを送らない
      */
     void insertEventDeleted(@Param("eventId") long eventId, @Param("operatorUserId") long operatorUserId);
+
+    /**
+     * 【何のため】自分あてのお知らせの数を数える。
+     */
+    long countByUser(@Param("userId") long userId);
+
+    /**
+     * 【何のため】自分あてのお知らせの1ページ分を、新しい順に返す。
+     */
+    List<NotificationRow> findByUser(@Param("userId") long userId, @Param("limit") int limit,
+            @Param("offset") long offset);
+
+    /**
+     * 【何のため】自分あての、未読のお知らせの数を数える。
+     */
+    long countUnread(@Param("userId") long userId);
+
+    /**
+     * 【何のため】自分あてのお知らせを1件探す。ない、または他人あてなら null。
+     */
+    NotificationRow findOne(@Param("userId") long userId, @Param("id") long id);
+
+    /**
+     * 【何のため】自分あてのお知らせを1件、既読にする。すでに既読なら、既読にした日時は変えない。
+     */
+    void markRead(@Param("userId") long userId, @Param("id") long id);
+
+    /**
+     * 【何のため】自分あての未読のお知らせを、すべて既読にする。
+     */
+    void markAllRead(@Param("userId") long userId);
 }

@@ -37,7 +37,7 @@ src/main/java/com/campfires/
 ├─ account/                  自分のアカウント（情報の取得、ニックネームの変更、アカウントの削除）
 ├─ community/                コミュニティとメンバー（一覧・検索、作成・編集、アーカイブ、参加申請、運営スタッフ、除名、退会）
 ├─ event/                    イベントと申込み（一覧・検索、作成・編集・削除、申込み、キャンセル待ち、キャンセル）
-└─ notification/             お知らせ（お知らせを作る SQL だけ作成済み。API は Issue #35 で作る）
+└─ notification/             お知らせ（一覧、未読の件数、既読）
 
 src/main/resources/
 ├─ application.properties    設定
