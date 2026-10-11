@@ -6,18 +6,9 @@
 import { delay, http, HttpResponse } from 'msw'
 import type { DeleteMeRequest, UpdateMeRequest } from '../../types/account'
 import { db } from '../db'
-import type { MockUser } from '../db/users'
-import { checkCsrf, clearSessionCookie, findLoggedInUser, problem, toMe } from './common'
+import { cancelUpcomingApplications } from '../rules'
+import { checkCsrf, clearSessionCookie, problem, requireLogin, toMe } from './common'
 import { Validator } from './validation'
-
-/**
- * 【何のため】ログインしていなければ 401 の返事を作る。ログインしていれば、そのユーザーを返す。
- * 呼び出す側は「返ってきたのが返事（Response）なら、それをそのまま返す」と書く。
- */
-function requireLogin(cookies: Record<string, string>): MockUser | Response {
-  const user = findLoggedInUser(cookies)
-  return user ?? problem(401, 'UNAUTHENTICATED', 'ログインしてください。')
-}
 
 export const accountHandlers = [
   /**
@@ -105,10 +96,8 @@ export const accountHandlers = [
     // 参加しているすべてのコミュニティから退会する（オーナーの行は残す。アーカイブ済みのコミュニティのオーナーとして表示するため）
     db.memberships = db.memberships.filter((m) => m.userId !== user.id || m.role === 'owner')
 
-    // 開催前のイベントへの申込みを、すべて取り消す。
-    // キャンセル待ちの繰り上げとお知らせは、イベントの画面を作るとき（Issue #23）に、共通の取り消しの処理に置き換える
-    const upcomingEventIds = db.events.filter((e) => new Date(e.endAt) > now).map((e) => e.id)
-    db.applications = db.applications.filter((a) => a.userId !== user.id || !upcomingEventIds.includes(a.eventId))
+    // 開催前のイベントへの申込みを、すべて取り消す（共通の処理。src/mocks/rules.ts）
+    cancelUpcomingApplications(user.id)
 
     // 個人情報を消し、行だけを残す（過去の申込みの記録に「退会したユーザー」と表示するため）
     user.realName = ''

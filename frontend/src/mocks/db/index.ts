@@ -5,7 +5,14 @@
  * 開発中だけ使い、本番用のファイルには含まれない。
  */
 
-import { createCommunities, createMemberships, type MockCommunity, type MockMembership } from './communities'
+import {
+  createCommunities,
+  createJoinRequests,
+  createMemberships,
+  type MockCommunity,
+  type MockJoinRequest,
+  type MockMembership,
+} from './communities'
 import { createApplications, createEvents, type MockApplication, type MockEvent } from './events'
 import { createNotifications, type MockNotification } from './notifications'
 import { createUsers, type MockUser } from './users'
@@ -27,6 +34,7 @@ export type MockDb = {
   users: MockUser[]
   communities: MockCommunity[]
   memberships: MockMembership[]
+  joinRequests: MockJoinRequest[]
   events: MockEvent[]
   applications: MockApplication[]
   notifications: MockNotification[]
@@ -43,12 +51,30 @@ function createDb(): MockDb {
   const users = createUsers(now)
   const communities = createCommunities(now)
   const memberships = createMemberships(communities, now)
+  const joinRequests = createJoinRequests(now)
   const events = createEvents(communities, now)
   const applications = createApplications(events)
   const notifications = createNotifications(events, now)
 
-  return { users, communities, memberships, events, applications, notifications, loginFailures: new Map() }
+  return {
+    users,
+    communities,
+    memberships,
+    joinRequests,
+    events,
+    applications,
+    notifications,
+    loginFailures: new Map(),
+  }
 }
 
 // 偽のデータベース。偽の API（src/mocks/handlers）から読み込んで使う
 export const db: MockDb = createDb()
+
+/**
+ * 【何のため】表に新しい行を足すときの番号を決める（今いちばん大きい番号の次）。
+ * 本物のデータベースでは、番号はデータベースが自動で付ける（PostgreSQL の IDENTITY）。
+ */
+export function nextId(rows: { id: number }[]): number {
+  return rows.length === 0 ? 1 : Math.max(...rows.map((row) => row.id)) + 1
+}
