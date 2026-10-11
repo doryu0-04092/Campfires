@@ -2,7 +2,8 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!--
   【役割】お知らせ（notifications テーブル）の SQL（NotificationMapper.java のメソッドと、id の名前で結び付く）。
-  【なぜ必要か】お知らせを作るルール（要件定義書 5.10）を、SQL で行うため。
+  【なぜ必要か】お知らせを作るルール（要件定義書 5.10）と、一覧・既読を、SQL で行うため。
+  一覧・既読の SQL は、必ず user_id で絞る（他人あてのお知らせを、見たり既読にしたりできないように）。
 -->
 <mapper namespace="com.campfires.notification.NotificationMapper">
 
@@ -32,4 +33,46 @@
         WHERE e.id = #{eventId}
           AND a.user_id &lt;&gt; #{operatorUserId}
     </insert>
+
+    <!--
+      出来事を起こした人のニックネームは、users の表とつなぎ合わせて求める。
+      起こした人がいないお知らせ（event_deleted）もあるので、LEFT JOIN（相手がいなくても行を残すつなぎ方）にする
+    -->
+    <sql id="selectNotification">
+        SELECT n.id, n.type, n.event_title, n.community_id, n.event_id, n.actor_user_id,
+               u.nickname AS actor_nickname, n.read_at, n.created_at
+        FROM notifications n
+        LEFT JOIN users u ON u.id = n.actor_user_id
+    </sql>
+
+    <select id="countByUser" resultType="long">
+        SELECT count(*) FROM notifications WHERE user_id = #{userId}
+    </select>
+
+    <select id="findByUser" resultType="com.campfires.notification.NotificationRow">
+        <include refid="selectNotification"/>
+        WHERE n.user_id = #{userId}
+        ORDER BY n.created_at DESC, n.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countUnread" resultType="long">
+        SELECT count(*) FROM notifications WHERE user_id = #{userId} AND read_at IS NULL
+    </select>
+
+    <select id="findOne" resultType="com.campfires.notification.NotificationRow">
+        <include refid="selectNotification"/>
+        WHERE n.user_id = #{userId} AND n.id = #{id}
+    </select>
+
+    <!-- COALESCE(read_at, now())：すでに既読なら、もとの日時のまま。未読なら、今の日時を入れる -->
+    <update id="markRead">
+        UPDATE notifications SET read_at = COALESCE(read_at, now())
+        WHERE user_id = #{userId} AND id = #{id}
+    </update>
+
+    <update id="markAllRead">
+        UPDATE notifications SET read_at = now()
+        WHERE user_id = #{userId} AND read_at IS NULL
+    </update>
 </mapper>
