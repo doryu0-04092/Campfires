@@ -23,3 +23,29 @@ const dateTimeFormatter = new Intl.DateTimeFormat('ja-JP', {
 export function formatDateTime(isoString: string): string {
   return dateTimeFormatter.format(new Date(isoString))
 }
+
+/**
+ * 【何のため】日時の入力欄（<input type="datetime-local">）に入れる形の文字に変える。
+ * 入力欄は「2026-10-10T19:00」のような、この PC の時刻（日本なら日本時間）の形を使う。
+ * 例："2026-10-10T10:00:00.000Z" → "2026-10-10T19:00"（日本時間の PC の場合）
+ */
+export function toDateTimeLocal(isoString: string): string {
+  const date = new Date(isoString)
+  // getTimezoneOffset は、世界標準時との差（分）。日本なら -540（9時間進んでいる）
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000)
+  // toISOString の先頭16文字（"2026-10-10T19:00"）だけを使う
+  return local.toISOString().slice(0, 16)
+}
+
+/**
+ * 【何のため】日時の入力欄の値を、API に送る形（世界標準時の ISO 8601 形式）に変える。
+ * 入力が空のときは、空の文字を返す（API が「入力してください」のエラーを返す）。
+ * 例："2026-10-10T19:00"（日本時間の PC の場合）→ "2026-10-10T10:00:00.000Z"
+ */
+export function fromDateTimeLocal(value: string): string {
+  if (value === '') {
+    return ''
+  }
+  // 「2026-10-10T19:00」のような値は、new Date がこの PC の時刻として読み取る
+  return new Date(value).toISOString()
+}

@@ -3,13 +3,15 @@
  * 【なぜ必要か】コミュニティの情報を見て、参加の申請（F-06）や退会（F-08）をするため。
  * 見ている人の立場（API が返す myRole、myJoinRequestStatus）によって、出すボタンを変える。
  * ただし、ボタンを出し分けるのは使いやすさのためで、本当の権限のチェックはバックエンド（偽の API）が行う。
- * イベントの一覧は、イベントの画面を作るとき（Issue #23）に追加する。
+ * 下のほうに、このコミュニティのイベントの一覧（開催前・終了済み）を表示する。
  */
 
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { ApiError } from '../api/client'
 import { fetchCommunity, leaveCommunity, requestToJoin } from '../api/communities'
+import { fetchCommunityEvents } from '../api/events'
+import EventCard from '../components/EventCard'
 import { useAuth } from '../auth/useAuth'
 import formStyles from '../components/Form.module.css'
 import styles from '../components/List.module.css'
@@ -65,9 +67,88 @@ function CommunityDetailPage() {
       <MembershipActions key={`${data.myRole}:${data.myJoinRequestStatus}`} community={data} onChanged={reload} />
       <ManageLinks community={data} />
 
-      <h2>イベント</h2>
-      <p className={styles.message}>このコミュニティのイベントの一覧は、イベントの画面を作るときに追加します。</p>
+      <CommunityEvents communityId={data.id} />
     </section>
+  )
+}
+
+/**
+ * 【何のため】コミュニティのイベントの一覧を、「開催前」と「終了済み」に切り替えて表示する。
+ * 終了したイベントは、トップのイベント一覧には出さないので、ここで見られるようにしている（要件定義書 5.8）。
+ */
+function CommunityEvents({ communityId }: { communityId: number }) {
+  // どちらを表示しているか。最初は開催前
+  const [status, setStatus] = useState<'upcoming' | 'past'>('upcoming')
+  const [page, setPage] = useState(1)
+  const { isLoading, data, error } = useLoader(`community-events:${communityId}:${status}:${page}`, (signal) =>
+    fetchCommunityEvents(communityId, status, page, signal),
+  )
+
+  /**
+   * 【何のため】開催前・終了済みを切り替える。切り替えたら1ページ目に戻す。
+   */
+  function changeStatus(next: 'upcoming' | 'past') {
+    setStatus(next)
+    setPage(1)
+  }
+
+  return (
+    <div>
+      <h2>イベント</h2>
+      {/* role="tablist"・"tab"・aria-selected：読み上げソフトに、切り替えのタブであることと、選ばれているほうを伝える */}
+      <div className={styles.actions} role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={status === 'upcoming'}
+          className={`${styles.button} ${status === 'upcoming' ? styles.buttonPrimary : ''}`}
+          onClick={() => changeStatus('upcoming')}
+        >
+          開催前
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={status === 'past'}
+          className={`${styles.button} ${status === 'past' ? styles.buttonPrimary : ''}`}
+          onClick={() => changeStatus('past')}
+        >
+          終了済み
+        </button>
+      </div>
+
+      {isLoading && <p className={styles.message}>読み込み中…</p>}
+      {error !== undefined && <LoadError error={error} />}
+      {data && (
+        <>
+          {data.items.length === 0 ? (
+            <p className={styles.message}>{status === 'upcoming' ? '開催前のイベントはありません。' : '終了したイベントはありません。'}</p>
+          ) : (
+            <ul className={styles.list}>
+              {data.items.map((event) => (
+                <li key={event.id}>
+                  <EventCard event={event} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* ページの切り替えは、URL ではなくこの画面の中だけで行うので、ボタンにしている */}
+          {data.totalPages > 1 && (
+            <div className={styles.actions}>
+              <button type="button" className={styles.button} onClick={() => setPage(page - 1)} disabled={page <= 1}>
+                前へ
+              </button>
+              <span className={styles.cardMeta}>
+                {page} / {data.totalPages}
+              </span>
+              <button type="button" className={styles.button} onClick={() => setPage(page + 1)} disabled={page >= data.totalPages}>
+                次へ
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   )
 }
 
