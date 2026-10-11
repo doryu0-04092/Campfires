@@ -40,12 +40,22 @@ RUN ./mvnw -q package -DskipTests
 # ============================================================
 # 段階3：動かすための箱（Java の実行環境だけ）
 # ============================================================
-FROM eclipse-temurin:21-jre
+# Alpine Linux 版の Java 21 の実行環境。Ubuntu 版より入っているソフトが少なく、
+# 脆弱性の数がいちばん少なかった（Trivy で比べた。docs/security.md を参照）
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
+# OS のパッケージを、修正済みの最新の版にする（作った時点で直っている脆弱性を残さない）
+RUN apk upgrade --no-cache
 # 管理者（root）ではない、アプリ専用の利用者で動かす（もし乗っ取られても、できることを少なくするため）
-RUN useradd --system --uid 10001 campfires
+RUN addgroup -S campfires && adduser -S -u 10001 -G campfires campfires
+# データベース（AWS の RDS）の証明書を確かめるための、AWS の公開の CA 証明書
+# （application-prod.properties の sslmode=verify-full で使う）
+ADD --chmod=444 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /app/rds-ca.pem
 COPY --from=backend /app/backend/target/*.jar app.jar
 USER campfires
+# 箱の中から、アプリが動いているかを確かめる（Docker の死活確認。AWS ではロードバランサーも確かめる）
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD wget -q -O /dev/null http://localhost:8080/api/health || exit 1
 # 本番の設定（application-prod.properties）を使う
 ENV SPRING_PROFILES_ACTIVE=prod
 # アプリが使う入口の番号

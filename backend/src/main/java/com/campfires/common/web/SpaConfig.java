@@ -36,7 +36,14 @@ public class SpaConfig implements WebMvcConfigurer {
      * 【何のため】URL に合うファイルを探す。見つからなければ、画面の入り口（index.html）を返す。
      * PathResourceResolver は、Spring が用意している「URL からファイルを探す」部品。それを土台にして、決まりを足す。
      */
-    static class SpaResourceResolver extends PathResourceResolver {
+    public static class SpaResourceResolver extends PathResourceResolver {
+
+        /**
+         * 【何のため】URL に合うファイルを探す（自動テストから、パストラバーサルの対策を確かめるために使う）。
+         */
+        public Resource find(String resourcePath, Resource location) throws IOException {
+            return getResource(resourcePath, location);
+        }
 
         @Override
         protected Resource getResource(String resourcePath, Resource location) throws IOException {
@@ -44,9 +51,12 @@ public class SpaConfig implements WebMvcConfigurer {
             if (resourcePath.startsWith("api/")) {
                 return null;
             }
-            // ファイルがあれば、それを返す（例：/assets/index-xxxx.js）
-            Resource requested = location.createRelative(resourcePath);
-            if (requested.exists() && requested.isReadable()) {
+            // ファイルがあれば、それを返す（例：/assets/index-xxxx.js）。
+            // super.getResource は、Spring の確認（ファイルが static/ の中にあるか）を通してから返す。
+            // 自分で location.createRelative を使うと、この確認を通らず、../ で static/ の外のファイル（設定ファイルなど）を
+            // 読まれるおそれがあるため、必ず super を通す（パストラバーサルの対策。セキュリティの見直し）
+            Resource requested = super.getResource(resourcePath, location);
+            if (requested != null) {
                 return requested;
             }
             // 拡張子の付いたファイル（例：/logo.png）が見つからないときは、画面を返さずに 404 にする
@@ -54,8 +64,7 @@ public class SpaConfig implements WebMvcConfigurer {
                 return null;
             }
             // それ以外（画面の URL）は、画面の入り口を返す。React が URL を見て、画面を選ぶ
-            Resource index = location.createRelative("index.html");
-            return index.exists() && index.isReadable() ? index : null;
+            return super.getResource("index.html", location);
         }
     }
 }
