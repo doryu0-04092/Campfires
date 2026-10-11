@@ -7,7 +7,7 @@
  * ただし、これは使いやすさのための仕組み。本当の権限のチェックはバックエンドで行う（技術構成 5章）。
  */
 
-import { Navigate, Outlet, useLocation } from 'react-router'
+import { Navigate, Outlet, useLocation, useOutletContext } from 'react-router'
 import { useAuth } from '../auth/useAuth'
 
 /**
@@ -18,6 +18,8 @@ function RequireAuth() {
   const { state } = useAuth()
   // 今の画面の場所（URL）。ログインのあとに戻ってくるために使う
   const location = useLocation()
+  // 画面の枠（Layout）から渡された値。中の画面にそのまま渡し直す（お知らせの画面が使う）
+  const layoutContext = useOutletContext()
 
   // ログインしているか確かめている途中は、何も表示しない（一瞬ログインの画面へ移動してしまうのを防ぐ）
   if (state.status === 'loading') {
@@ -31,7 +33,7 @@ function RequireAuth() {
   }
 
   // ログインしていれば、中の画面をそのまま表示する
-  return <Outlet />
+  return <Outlet context={layoutContext} />
 }
 
 export default RequireAuth

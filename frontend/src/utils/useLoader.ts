@@ -15,6 +15,8 @@ type LoaderResult<T> = {
   isLoading: boolean
   // 読み込んだデータ。まだないときや失敗したときは undefined
   data: T | undefined
+  // 最後に届いたデータ。読み込み直している途中も、前のデータを返す（表示がちらつかないようにしたいときに使う）
+  latestData: T | undefined
   // 失敗したときのエラー。成功したときは undefined
   error: unknown
   // もう一度読み込む
@@ -62,6 +64,7 @@ export function useLoader<T>(key: string, load: (signal: AbortSignal) => Promise
   return {
     isLoading,
     data: isLoading ? undefined : result?.data,
+    latestData: result?.data,
     error: isLoading ? undefined : result?.error,
     // (v) => v + 1 は「今の値に 1 を足す」という書き方
     reload: () => setVersion((v) => v + 1),

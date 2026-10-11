@@ -54,6 +54,20 @@
   cursor: pointer;             /* マウスを乗せたとき、指の形にする */
 }
 
+/* お知らせの未読の件数：強調色の丸い札 */
+.unreadBadge {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+}
+
 /* ログインしている人のニックネーム：少し薄い文字にする */
 .userName {
   color: var(--text-muted);

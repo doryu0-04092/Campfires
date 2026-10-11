@@ -9,10 +9,14 @@
 // Outlet：URL に合った画面の中身を、ここに差し込むための目印
 // ScrollRestoration：画面を移動したとき、スクロールの位置を一番上に戻す（「戻る」のときは元の位置に戻す）
 // useNavigate：プログラムの中から、別の画面へ移動するための関数
-import { Link, Outlet, ScrollRestoration, useNavigate } from 'react-router'
+// useLocation：今の画面の場所（URL）を読み出す関数
+import { Link, Outlet, ScrollRestoration, useLocation, useNavigate } from 'react-router'
 import { useState } from 'react'
+import { fetchUnreadCount } from '../api/notifications'
 // ログイン状態と、ログアウトの操作を読み出す
 import { useAuth } from '../auth/useAuth'
+import { useLoader } from '../utils/useLoader'
+import type { LayoutContext } from './layoutContext'
 // 左側のメニュー（ユーザー・コミュニティ管理）
 import Sidebar from './Sidebar'
 // この部品専用の CSS を読み込む。styles.header のように、クラス名を取り出して使う
@@ -22,6 +26,18 @@ import styles from './Layout.module.css'
  * 【何のため】画面の枠を表示し、その真ん中に各画面の中身を表示する。
  */
 function Layout() {
+  const { state } = useAuth()
+  const location = useLocation()
+  // 未読の件数を取り直すための番号。お知らせの画面で既読にしたときに 1 増やす
+  const [unreadVersion, setUnreadVersion] = useState(0)
+  // 未読の件数。画面を移動するたび（URL が変わるたび）と、既読にしたときに取り直す。
+  // ログインしていないときは、取りに行かずに 0 とする
+  const unread = useLoader(`unread:${state.status}:${location.pathname}:${unreadVersion}`, (signal) =>
+    state.status === 'authenticated' ? fetchUnreadCount(signal) : Promise.resolve(0),
+  )
+  // 中の画面へ渡す値（お知らせの画面が、既読にしたあとに呼ぶ）
+  const context: LayoutContext = { refreshUnreadCount: () => setUnreadVersion((v) => v + 1) }
+
   return (
     // 画面全体を縦に並べる入れ物
     <div className={styles.page}>
@@ -32,15 +48,17 @@ function Layout() {
           Campfires
         </Link>
         {/* メニューの中身は、ログイン状態によって変わるので、HeaderMenu に分けている */}
-        <HeaderMenu />
+        {/* 取り直している途中も、前の件数を出しておく（数字がちらつかないように） */}
+        <HeaderMenu unreadCount={unread.latestData ?? 0} />
       </header>
 
       {/* 画面の真ん中：左に Sidebar、右に各画面の中身を横に並べる */}
       <div className={styles.body}>
         <Sidebar />
-        {/* 画面の中身：URL に合った画面が、この Outlet の場所に表示される */}
+        {/* 画面の中身：URL に合った画面が、この Outlet の場所に表示される。
+            context に渡した値は、中の画面から useLayoutContext() で受け取れる */}
         <main className={styles.main}>
-          <Outlet />
+          <Outlet context={context} />
         </main>
       </div>
 
@@ -63,7 +81,7 @@ function Layout() {
  * - ログインしている：ニックネーム、「お知らせ」「アカウント設定」「ログアウト」
  * アカウント設定は、普段の操作でよく使うものではないので、左側のメニューではなく、ここに置いている。
  */
-function HeaderMenu() {
+function HeaderMenu({ unreadCount }: { unreadCount: number }) {
   const { state, logout } = useAuth()
   const navigate = useNavigate()
   // ログアウトの途中かどうか。途中はボタンを押せないようにして、二重に押されるのを防ぐ
@@ -106,7 +124,15 @@ function HeaderMenu() {
     <nav className={styles.nav}>
       {/* 誰としてログインしているかを表示する（ニックネームだけ。本名は出さない） */}
       <span className={styles.userName}>{state.me.nickname} さん</span>
-      <Link to="/notifications" className={styles.menuButton}>お知らせ</Link>
+      {/* 未読があれば、件数を出す。aria-label で、読み上げソフトには「お知らせ（未読 2件）」と伝える */}
+      <Link
+        to="/notifications"
+        className={styles.menuButton}
+        aria-label={unreadCount > 0 ? `お知らせ（未読 ${unreadCount}件）` : 'お知らせ'}
+      >
+        お知らせ
+        {unreadCount > 0 && <span className={styles.unreadBadge}>{unreadCount}</span>}
+      </Link>
       <Link to="/account" className={styles.menuButton}>アカウント設定</Link>
       <button type="button" className={styles.menuButton} onClick={handleLogout} disabled={isLoggingOut}>
         {isLoggingOut ? 'ログアウト中…' : 'ログアウト'}
