@@ -6,6 +6,7 @@
  */
 
 import type { EventListResponse } from '../types/event'
+import { apiRequest } from './client'
 
 /**
  * 【何のため】fetchEvents に渡す値の形を決める。
@@ -22,7 +23,7 @@ type FetchEventsParams = {
 
 /**
  * 【何のため】イベント一覧・検索の API（GET /api/events）を呼び出し、結果を返す。
- * async を付けた関数は、結果を「あとで届くもの」（Promise）として返す。
+ * 失敗したときは、共通の処理（apiRequest）が ApiError を投げる。
  */
 export async function fetchEvents({ query, page, signal }: FetchEventsParams): Promise<EventListResponse> {
   // URL の「?」より後ろの部分（例：q=Java&page=2）を組み立てる。
@@ -35,16 +36,5 @@ export async function fetchEvents({ query, page, signal }: FetchEventsParams): P
     params.set('page', String(page))
   }
 
-  // fetch：ブラウザに備わっている、API を呼び出すための関数。await で返事が届くまで待つ
-  const response = await fetch(`/api/events?${params.toString()}`, { signal })
-
-  // response.ok は、返事が成功（200番台）かどうか。失敗なら、エラーとして呼び出し元に知らせる
-  if (!response.ok) {
-    throw new Error(`イベントの取得に失敗しました（${response.status}）`)
-  }
-
-  // 返事の中身（JSON）を、決めておいた形（EventListResponse）として受け取る。
-  // as は「この形だと信じて扱う」という書き方。形が違っても TypeScript は気づけないので、
-  // 本物の API とつなぐときに、API 仕様書どおりの形かを確かめる
-  return (await response.json()) as EventListResponse
+  return apiRequest<EventListResponse>(`/api/events?${params.toString()}`, { signal })
 }
