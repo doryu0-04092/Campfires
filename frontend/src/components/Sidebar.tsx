@@ -47,39 +47,19 @@ const manageItems: MenuItem[] = [
   { to: '/manage/communities/new', label: 'コミュニティ作成' },      // S-04
 ]
 
-// 開発中だけ表示する項目。番号が必要な画面を、例の番号（1番）で開けるようにする。
-// import.meta.env.DEV は、開発用のサーバー（npm run dev）のときだけ true になる値。
-// 本番用のファイル（npm run build）では false になるので、この項目は本番に含まれない。
-const devUserItems: MenuItem[] = import.meta.env.DEV
-  ? [
-      { to: '/communities/1', label: 'コミュニティ詳細（例）' },         // S-05
-      { to: '/communities/1/events/1', label: 'イベント詳細（例）' },    // S-09
-    ]
-  : []
-
-const devManageItems: MenuItem[] = import.meta.env.DEV
-  ? [
-      { to: '/manage/communities/1/edit', label: 'コミュニティ編集（例）' },                   // S-06
-      { to: '/manage/communities/1/members', label: 'メンバー管理（例）' },                    // S-07
-      { to: '/manage/communities/1/events/new', label: 'イベント作成（例）' },                 // S-08
-      { to: '/manage/communities/1/events/1/edit', label: 'イベント編集（例）' },              // S-10
-      { to: '/manage/communities/1/events/1/applicants', label: '申込者一覧（例）' },          // S-11
-    ]
-  : []
-
 // メニュー全体。上に「ユーザー」、下に「コミュニティ管理」を置く。
 // 「管理者」としないのは、要件定義書で「管理者」をアプリの運営者の意味で使っているため。
-// [...a, ...b] は、2つの一覧をつなげて1つにする書き方
+// 番号が必要な画面（コミュニティ詳細、イベント詳細など）は、一覧の画面から移動して開く
 const menuGroups: MenuGroup[] = [
   {
     title: 'ユーザー',
     description: 'コミュニティに参加して使う',
-    items: [...userItems, ...devUserItems],
+    items: userItems,
   },
   {
     title: 'コミュニティ管理',
     description: 'オーナー・運営スタッフ向け',
-    items: [...manageItems, ...devManageItems],
+    items: manageItems,
   },
 ]
 
