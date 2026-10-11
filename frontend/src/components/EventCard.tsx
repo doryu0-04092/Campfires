@@ -5,7 +5,8 @@
  */
 
 import { Link } from 'react-router'
-import type { EventSummary } from '../types/event'
+import type { EventSummary, MyApplication } from '../types/event'
+import listStyles from './List.module.css'
 import { formatDateTime } from '../utils/formatDateTime'
 import styles from './EventCard.module.css'
 
@@ -15,12 +16,14 @@ import styles from './EventCard.module.css'
 type EventCardProps = {
   // 表示するイベント
   event: EventSummary
+  // 自分の申込みの状況。渡されたときは、タイトルの横に「申込み済み」「キャンセル待ち」の札を出す
+  myApplication?: MyApplication
 }
 
 /**
  * 【何のため】イベント1件分の情報を、カードの形で表示する。
  */
-function EventCard({ event }: EventCardProps) {
+function EventCard({ event, myApplication }: EventCardProps) {
   // 残りの枠数が 0 なら満席
   const isFull = event.remainingSeats === 0
 
@@ -30,6 +33,11 @@ function EventCard({ event }: EventCardProps) {
       {/* タイトル：押すとイベント詳細（S-09）へ移動する */}
       <h2 className={styles.title}>
         <Link to={`/communities/${event.communityId}/events/${event.id}`}>{event.title}</Link>
+        {myApplication && (
+          <span className={`${listStyles.badge} ${myApplication.status === 'applied' ? listStyles.badgeAccent : listStyles.badgeMuted}`}>
+            {myApplication.status === 'applied' ? '申込み済み' : `キャンセル待ち ${myApplication.waitlistPosition}番目`}
+          </span>
+        )}
       </h2>
 
       {/* コミュニティの名前：押すとコミュニティ詳細（S-05）へ移動する */}

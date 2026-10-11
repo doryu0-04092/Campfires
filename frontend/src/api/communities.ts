@@ -11,6 +11,7 @@ import type {
   JoinRequest,
   JoinRequestListResponse,
   ManagedCommunityListResponse,
+  MyCommunityListResponse,
   Member,
   MemberListResponse,
 } from '../types/community'
@@ -25,9 +26,24 @@ function pageQuery(page: number): string {
 
 // ---------- コミュニティ ----------
 
-/** 【何のため】コミュニティの一覧を取得する（GET /api/communities）。 */
-export function fetchCommunities(page: number, signal?: AbortSignal) {
-  return apiRequest<CommunityListResponse>(`/api/communities${pageQuery(page)}`, { signal })
+/**
+ * 【何のため】コミュニティの一覧・検索を取得する（GET /api/communities）。
+ * query が空なら、すべてのコミュニティ。空でなければ、名前と説明で検索する。
+ */
+export function fetchCommunities(query: string, page: number, signal?: AbortSignal) {
+  const params = new URLSearchParams()
+  if (query !== '') {
+    params.set('q', query)
+  }
+  if (page > 1) {
+    params.set('page', String(page))
+  }
+  return apiRequest<CommunityListResponse>(`/api/communities?${params.toString()}`, { signal })
+}
+
+/** 【何のため】自分がメンバーとして参加しているコミュニティの一覧を取得する（GET /api/me/communities）。 */
+export function fetchMyCommunities(signal?: AbortSignal) {
+  return apiRequest<MyCommunityListResponse>('/api/me/communities', { signal })
 }
 
 /** 【何のため】管理しているコミュニティの一覧を取得する（GET /api/me/managed-communities）。 */

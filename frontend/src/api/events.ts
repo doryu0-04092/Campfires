@@ -12,6 +12,7 @@ import type {
   EventInput,
   EventListResponse,
   MyApplication,
+  MyEventListResponse,
 } from '../types/event'
 import { apiRequest } from './client'
 
@@ -96,4 +97,9 @@ export function cancelMyApplication(communityId: number, eventId: number) {
 export function fetchApplications(communityId: number, eventId: number, page: number, signal?: AbortSignal) {
   const query = page > 1 ? `?page=${page}` : ''
   return apiRequest<ApplicationListResponse>(`${eventPath(communityId, eventId)}/applications${query}`, { signal })
+}
+
+/** 【何のため】自分が申し込んだ開催前のイベントの一覧を取得する（GET /api/me/events）。 */
+export function fetchMyEvents(signal?: AbortSignal) {
+  return apiRequest<MyEventListResponse>('/api/me/events', { signal })
 }
