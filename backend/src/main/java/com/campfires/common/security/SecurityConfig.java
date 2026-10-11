@@ -80,8 +80,9 @@ public class SecurityConfig {
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
 
                 // ---------- 削除済みのアカウントのセッションを止める ----------
-                // ログインのチェック（AuthorizationFilter）の後に、アカウントが削除されていないかを確かめる
-                .addFilterAfter(new ActiveUserFilter(userMapper, problemWriter), AuthorizationFilter.class)
+                // ログインのチェック（AuthorizationFilter）の前に、アカウントが削除されていないかを確かめる。
+                // 削除済みならログアウトさせるので、その後のログインのチェックで「ログインしていない人」として扱われる
+                .addFilterBefore(new ActiveUserFilter(userMapper), AuthorizationFilter.class)
 
                 // ログインの画面（フォーム）や、ブラウザの認証の窓は使わない（画面は React で作っているため）
                 .formLogin(form -> form.disable())

@@ -2,7 +2,6 @@ package com.campfires.common.security;
 
 import java.io.IOException;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
@@ -21,7 +20,8 @@ import jakarta.servlet.http.HttpServletResponse;
  * 【役割】ログインしている人のアカウントが、削除されていないかを、API の呼び出しのたびに確かめるフィルター。
  * 【なぜ必要か】アカウントを削除すると、削除の操作をした端末のセッションは消える。
  * しかし、ほかの端末（スマートフォンなど）でログインしていたセッションは残る。
- * そのセッションで操作を続けられないように、削除済みなら、セッションを消して 401 を返す。
+ * そのセッションで操作を続けられないように、削除済みなら、セッションを消して「ログインしていない人」として扱う。
+ * その後、ログインが必要な API なら、ふつうと同じように 401 になり、ログインなしで見られる API なら、そのまま見られる。
  *
  * フィルターは「API の処理の前に、必ず通る関所」。OncePerRequestFilter は「1回の呼び出しで1度だけ通る」フィルター。
  * Spring に部品として登録すると、セキュリティの外でも自動でもう1度登録されてしまうため、
@@ -30,15 +30,13 @@ import jakarta.servlet.http.HttpServletResponse;
 public class ActiveUserFilter extends OncePerRequestFilter {
 
     private final UserMapper userMapper;
-    private final ProblemResponseWriter problemWriter;
 
-    public ActiveUserFilter(UserMapper userMapper, ProblemResponseWriter problemWriter) {
+    public ActiveUserFilter(UserMapper userMapper) {
         this.userMapper = userMapper;
-        this.problemWriter = problemWriter;
     }
 
     /**
-     * 【何のため】ログインしている人が削除済みなら、ログアウトさせて 401 を返す。それ以外は、そのまま先へ進める。
+     * 【何のため】ログインしている人が削除済みなら、ログアウトさせる。どちらの場合も、そのまま先へ進める。
      */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -50,8 +48,6 @@ public class ActiveUserFilter extends OncePerRequestFilter {
             if (user == null || user.deletedAt() != null) {
                 new SecurityContextLogoutHandler().logout(request, response, authentication);
                 new CookieClearingLogoutHandler("JSESSIONID").logout(request, response, authentication);
-                problemWriter.write(response, HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "ログインしてください。");
-                return;
             }
         }
         chain.doFilter(request, response);

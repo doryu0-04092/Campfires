@@ -23,4 +23,9 @@
     <delete id="deleteMembershipsExceptOwner">
         DELETE FROM memberships WHERE user_id = #{userId} AND role &lt;&gt; 'owner'
     </delete>
+
+    <update id="rejectPendingJoinRequests">
+        UPDATE join_requests SET status = 'rejected', decided_at = now()
+        WHERE user_id = #{userId} AND status = 'pending'
+    </update>
 </mapper>

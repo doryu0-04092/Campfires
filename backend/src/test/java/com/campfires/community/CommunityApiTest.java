@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpSession;
 
 import com.campfires.ApiTestBase;
 
@@ -211,21 +212,37 @@ class CommunityApiTest extends ApiTestBase {
 
     /**
      * 【何のため】ほかの端末でアカウントを削除したとき、残っているセッションでは操作できない（401）ことを確かめる。
+     * ログインなしで見られる API は、ログインしていない人として見られること。
      */
     @Test
     void 削除したアカウントのほかのセッションは使えない() throws Exception {
         Account me = newAccount();
-        // 同じアカウントで、別の端末からログインする
-        org.springframework.mock.web.MockHttpSession otherDevice = new org.springframework.mock.web.MockHttpSession();
-        mockMvc.perform(withJson(post("/api/auth/login"), Map.of("email", me.email(), "password", PASSWORD))
-                .session(otherDevice))
-                .andExpect(status().isOk());
+        long communityId = createCommunity(newAccount(), "公開のテスト", "");
+        // 同じアカウントで、別の端末（2台）からログインする
+        MockHttpSession phone = loginOnAnotherDevice(me);
+        MockHttpSession tablet = loginOnAnotherDevice(me);
 
         mockMvc.perform(as(me, delete("/api/me"), Map.of("password", PASSWORD))).andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/me/communities").session(otherDevice))
+        // ログインが必要な API は 401。セッションも消える
+        mockMvc.perform(get("/api/me/communities").session(phone))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
-        assertThat(otherDevice.isInvalid()).isTrue();
+        assertThat(phone.isInvalid()).isTrue();
+
+        // ログインなしで見られる API は、ログインしていない人として見られる
+        mockMvc.perform(get("/api/communities/" + communityId).session(tablet))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.myRole").isEmpty());
+        assertThat(tablet.isInvalid()).isTrue();
+    }
+
+    /** 【何のため】別の端末からログインしたセッションを返す。 */
+    private MockHttpSession loginOnAnotherDevice(Account account) throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(withJson(post("/api/auth/login"), Map.of("email", account.email(), "password", PASSWORD))
+                .session(session))
+                .andExpect(status().isOk());
+        return session;
     }
 }

@@ -73,6 +73,8 @@ public class AccountService {
 
         // 参加しているすべてのコミュニティから退会する（オーナーの行は残す）
         accountMapper.deleteMembershipsExceptOwner(userId);
+        // 申請中の参加申請は、却下にする（削除したユーザーが、後から承認されてメンバーにならないように）
+        accountMapper.rejectPendingJoinRequests(userId);
         // 開催前のイベントへの申込みを、すべて取り消す（繰り上げとお知らせも、ルールどおりに行われる）
         applicationCancelService.cancelUpcomingApplications(userId, userId, null);
         // 個人情報を消し、行だけを残す（過去の申込みの記録に「退会したユーザー」と表示するため）

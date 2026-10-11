@@ -27,4 +27,10 @@ public interface AccountMapper {
      * オーナーの行は残す（アーカイブ済みのコミュニティのオーナーとして「退会したユーザー」と表示するため）。
      */
     void deleteMembershipsExceptOwner(@Param("userId") long userId);
+
+    /**
+     * 【何のため】申請中の参加申請を、すべて却下にする。
+     * 残しておくと、削除したユーザーを、オーナーが承認してメンバーにできてしまうため。
+     */
+    void rejectPendingJoinRequests(@Param("userId") long userId);
 }
