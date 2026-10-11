@@ -148,6 +148,14 @@ class MemberApiTest extends ApiTestBase {
                 .andExpect(jsonPath("$.items[0].user.userId").value(owner.id()))
                 .andExpect(jsonPath("$.items[1].user.userId").value(staff.id()))
                 .andExpect(jsonPath("$.items[2].user.userId").value(member.id()));
+        // group で、オーナー・運営スタッフと、一般のメンバーを分けて取れる（Issue #45）
+        mockMvc.perform(get("/api/communities/" + id + "/members").param("group", "managers").session(staff.session()))
+                .andExpect(jsonPath("$.totalCount").value(2))
+                .andExpect(jsonPath("$.items[0].role").value("owner"))
+                .andExpect(jsonPath("$.items[1].role").value("staff"));
+        mockMvc.perform(get("/api/communities/" + id + "/members").param("group", "members").session(staff.session()))
+                .andExpect(jsonPath("$.totalCount").value(1))
+                .andExpect(jsonPath("$.items[0].user.userId").value(member.id()));
         mockMvc.perform(get("/api/communities/" + id + "/members").session(member.session()))
                 .andExpect(status().isForbidden());
 

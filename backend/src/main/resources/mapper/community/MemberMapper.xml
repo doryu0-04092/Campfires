@@ -76,8 +76,18 @@
         ON CONFLICT (community_id, user_id) DO NOTHING
     </insert>
 
+    <!--
+      group で、立場を絞る部品。managers：オーナーと運営スタッフだけ、members：一般のメンバーだけ、どちらでもなければ全員。
+      <if test="…"> の中の 'managers' は、決まった文字との比較（入力の値を SQL に埋め込むわけではない）
+    -->
+    <sql id="groupCondition">
+        <if test="group == 'managers'">AND m.role IN ('owner', 'staff')</if>
+        <if test="group == 'members'">AND m.role = 'member'</if>
+    </sql>
+
     <select id="countMembers" resultType="long">
-        SELECT count(*) FROM memberships WHERE community_id = #{communityId}
+        SELECT count(*) FROM memberships m WHERE m.community_id = #{communityId}
+        <include refid="groupCondition"/>
     </select>
 
     <!-- 立場の順番は、CASE で数に置き換えて並べる（owner → 0、staff → 1、member → 2） -->
@@ -85,6 +95,7 @@
         SELECT m.user_id, u.nickname, m.role, m.joined_at
         FROM memberships m JOIN users u ON u.id = m.user_id
         WHERE m.community_id = #{communityId}
+        <include refid="groupCondition"/>
         ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'staff' THEN 1 ELSE 2 END, m.joined_at, m.user_id
         LIMIT #{limit} OFFSET #{offset}
     </select>

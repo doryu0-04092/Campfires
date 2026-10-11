@@ -96,9 +96,16 @@ export function decideJoinRequest(communityId: number, joinRequestId: number, st
   })
 }
 
-/** 【何のため】メンバーの一覧を取得する（GET /api/communities/:communityId/members）。 */
-export function fetchMembers(communityId: number, page: number, signal?: AbortSignal) {
-  return apiRequest<MemberListResponse>(`/api/communities/${communityId}/members${pageQuery(page)}`, { signal })
+/**
+ * 【何のため】メンバーの一覧を取得する（GET /api/communities/:communityId/members）。
+ * @param group managers ならオーナーと運営スタッフだけ、members なら一般のメンバーだけ
+ */
+export function fetchMembers(communityId: number, group: 'managers' | 'members', page: number, signal?: AbortSignal) {
+  const params = new URLSearchParams({ group })
+  if (page > 1) {
+    params.set('page', String(page))
+  }
+  return apiRequest<MemberListResponse>(`/api/communities/${communityId}/members?${params.toString()}`, { signal })
 }
 
 /** 【何のため】運営スタッフに任命・解除する（PATCH /api/communities/:communityId/members/:userId）。 */

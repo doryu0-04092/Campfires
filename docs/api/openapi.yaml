@@ -660,6 +660,7 @@ paths:
         コミュニティのメンバー（オーナー、運営スタッフを含む）を、立場の順（オーナー → 運営スタッフ → メンバー）、
         同じ立場なら参加した日時の古い順に返します。
         オーナーと運営スタッフだけができます。返す名前はニックネームだけです（README 1.9）。
+        group を付けると、立場で絞れます（メンバー管理の画面で、オーナー・運営スタッフと一般のメンバーを分けて表示するため）。
 
         返す code
         - FORBIDDEN（403）：オーナーでも運営スタッフでもない
@@ -667,6 +668,14 @@ paths:
       security:
         - sessionCookie: []
       parameters:
+        - name: group
+          in: query
+          required: false
+          description: |
+            managers：オーナーと運営スタッフだけ、members：一般のメンバーだけ。付けなければ全員
+          schema:
+            type: string
+            enum: [managers, members]
         - $ref: '#/components/parameters/Page'
       responses:
         '200':

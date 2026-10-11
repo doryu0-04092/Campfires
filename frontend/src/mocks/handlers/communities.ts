@@ -426,6 +426,7 @@ export const communityHandlers = [
   /**
    * メンバーの一覧（GET /api/communities/:communityId/members）。オーナーと運営スタッフだけ。
    * 立場の順（オーナー → 運営スタッフ → メンバー）、同じ立場なら参加した日時の古い順。
+   * group=managers ならオーナーと運営スタッフだけ、group=members なら一般のメンバーだけ（Issue #45）。
    */
   http.get('/api/communities/:communityId/members', async ({ request, params, cookies }) => {
     await delay(300)
@@ -441,8 +442,10 @@ export const communityHandlers = [
     if (role !== 'owner' && role !== 'staff') {
       return forbidden()
     }
+    const group = new URL(request.url).searchParams.get('group')
     const items = db.memberships
       .filter((m) => m.communityId === community.id)
+      .filter((m) => (group === 'managers' ? m.role !== 'member' : group === 'members' ? m.role === 'member' : true))
       .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || a.joinedAt.localeCompare(b.joinedAt))
       .map(toMember)
     return HttpResponse.json(paginate(items, parsePage(request)))
