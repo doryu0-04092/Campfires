@@ -60,8 +60,8 @@ function Layout() {
  * 【何のため】画面上部のメニューを、ログイン状態に合わせて表示する。
  * - 確かめている途中：何も出さない（一瞬「ログイン」が見えてから消える、というちらつきを防ぐため）
  * - ログインしていない：「ログイン」「アカウント登録」
- * - ログインしている：ニックネーム、「お知らせ」「ログアウト」
- * アカウント設定は、左側のメニューの「ユーザー」に置いている。
+ * - ログインしている：ニックネーム、「お知らせ」「アカウント設定」「ログアウト」
+ * アカウント設定は、普段の操作でよく使うものではないので、左側のメニューではなく、ここに置いている。
  */
 function HeaderMenu() {
   const { state, logout } = useAuth()
@@ -107,6 +107,7 @@ function HeaderMenu() {
       {/* 誰としてログインしているかを表示する（ニックネームだけ。本名は出さない） */}
       <span className={styles.userName}>{state.me.nickname} さん</span>
       <Link to="/notifications" className={styles.menuButton}>お知らせ</Link>
+      <Link to="/account" className={styles.menuButton}>アカウント設定</Link>
       <button type="button" className={styles.menuButton} onClick={handleLogout} disabled={isLoggingOut}>
         {isLoggingOut ? 'ログアウト中…' : 'ログアウト'}
       </button>
