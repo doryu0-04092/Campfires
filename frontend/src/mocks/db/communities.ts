@@ -3,7 +3,7 @@
  * 【なぜ必要か】コミュニティの画面や、立場（オーナー・運営スタッフ・メンバー）ごとの動きを試せるようにするため。
  */
 
-import { DUMMY_USER_COUNT, FIRST_DUMMY_USER_ID } from './users'
+import { APPLICANT_USER_IDS, DUMMY_USER_COUNT, FIRST_DUMMY_USER_ID } from './users'
 
 /**
  * 【何のため】偽のデータベースのコミュニティ1件分の形。
@@ -32,6 +32,18 @@ export type MockMembership = {
   userId: number
   role: MockRole
   joinedAt: string
+}
+
+/**
+ * 【何のため】偽のデータベースの参加申請1件分の形（要件定義書 5.1）。
+ */
+export type MockJoinRequest = {
+  id: number
+  communityId: number
+  userId: number
+  // pending：申請中、approved：承認済み、rejected：却下
+  status: 'pending' | 'approved' | 'rejected'
+  requestedAt: string
 }
 
 // 偽のコミュニティの名前、説明、オーナー。番号は、この並びの順に 1, 2, 3... とする
@@ -89,4 +101,18 @@ export function createMemberships(communities: MockCommunity[], now: number): Mo
   memberships.push({ communityId: 1, userId: 3, role: 'member', joinedAt })
 
   return memberships
+}
+
+/**
+ * 【何のため】参加申請の表の最初のデータを作る。
+ * みさきとけんたが、Java 勉強会（1）に申請中。承認・却下の操作を試せるようにするため。
+ */
+export function createJoinRequests(now: number): MockJoinRequest[] {
+  return APPLICANT_USER_IDS.map((userId, index) => ({
+    id: index + 1,
+    communityId: 1,
+    userId,
+    status: 'pending',
+    requestedAt: new Date(now - (3 - index) * DAY).toISOString(),
+  }))
 }

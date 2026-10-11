@@ -73,5 +73,23 @@ export function createUsers(now: number): MockUser[] {
     })
   }
 
+  // 参加申請を試すための、どのコミュニティにも入っていないユーザー（Java 勉強会に申請中にする）
+  const applicantsCreatedAt = new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString()
+  for (const [index, nickname] of ['みさき', 'けんた'].entries()) {
+    users.push({
+      id: APPLICANT_USER_IDS[index],
+      realName: `申請者 ${index + 1}`,
+      nickname,
+      email: `applicant${index + 1}@example.com`,
+      password: MOCK_PASSWORD,
+      policiesAgreedAt: applicantsCreatedAt,
+      deletedAt: null,
+      createdAt: applicantsCreatedAt,
+    })
+  }
+
   return users
 }
+
+// 参加申請を試すためのユーザーの番号（参加者01〜40 の次）
+export const APPLICANT_USER_IDS = [FIRST_DUMMY_USER_ID + DUMMY_USER_COUNT, FIRST_DUMMY_USER_ID + DUMMY_USER_COUNT + 1]
