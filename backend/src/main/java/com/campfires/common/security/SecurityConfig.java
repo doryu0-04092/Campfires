@@ -8,10 +8,13 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfException;
+
+import com.campfires.account.UserMapper;
 
 /**
  * 【役割】ログイン、権限、CSRF の対策など、セキュリティの設定をまとめたクラス（Spring Security）。
@@ -30,7 +33,8 @@ public class SecurityConfig {
      * 【何のため】セキュリティのルールを組み立てる。
      */
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, ProblemResponseWriter problemWriter) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, ProblemResponseWriter problemWriter, UserMapper userMapper)
+            throws Exception {
         http
                 // ---------- CSRF の対策（docs/api/README.md 1.7） ----------
                 // spa() は、画面と API を分けたアプリ向けの設定。
@@ -74,6 +78,10 @@ public class SecurityConfig {
                         .logoutUrl("/api/auth/logout")
                         .deleteCookies("JSESSIONID")
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
+
+                // ---------- 削除済みのアカウントのセッションを止める ----------
+                // ログインのチェック（AuthorizationFilter）の後に、アカウントが削除されていないかを確かめる
+                .addFilterAfter(new ActiveUserFilter(userMapper, problemWriter), AuthorizationFilter.class)
 
                 // ログインの画面（フォーム）や、ブラウザの認証の窓は使わない（画面は React で作っているため）
                 .formLogin(form -> form.disable())

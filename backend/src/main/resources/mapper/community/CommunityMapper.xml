@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  【役割】コミュニティ（communities テーブル）の SQL（CommunityMapper.java のメソッドと、id の名前で結び付く）。
+  【なぜ必要か】コミュニティの一覧・検索のルール（要件定義書 5.11）と、作成・編集・アーカイブ（5.9）を、SQL で行うため。
+  結果は、列の名前と record の項目の名前で結び付く（application.properties の arg-name-based-constructor-auto-mapping）。
+-->
+<mapper namespace="com.campfires.community.CommunityMapper">
+
+    <!-- メンバーの人数を数える、何度も使う SQL の部品。c はコミュニティの表の別名 -->
+    <sql id="memberCount">
+        (SELECT count(*) FROM memberships m WHERE m.community_id = c.id)
+    </sql>
+
+    <!--
+      検索の単語が、名前と説明にいくつ含まれているかを数える部品（要件定義書 5.11）。
+      strpos(文, 単語) は、文の中で単語が見つかった位置（見つからなければ 0）を返す。
+      LIKE と違って、単語の中の % や _ を特別な文字として扱わないので、入力をそのまま探せる。
+      <foreach> は、単語の数だけ「見つかれば 1、なければ 0」を作り、+ でつなぐ（足し算）。
+      単語がないとき（検索していないとき）は 0 にする
+    -->
+    <sql id="score">
+        <choose>
+            <when test="words.isEmpty()">0</when>
+            <otherwise>
+                (<foreach collection="words" item="word" separator=" + ">
+                    CASE WHEN strpos(lower(c.name || ' ' || c.description), #{word}) > 0 THEN 1 ELSE 0 END
+                </foreach>)
+            </otherwise>
+        </choose>
+    </sql>
+
+    <!-- 検索の対象：アーカイブしていないコミュニティ。検索しているときは、1つでも単語を含むものだけ -->
+    <sql id="searchTarget">
+        FROM (
+            SELECT c.id, c.name, c.description, c.created_at,
+                   <include refid="memberCount"/> AS member_count,
+                   <include refid="score"/> AS score
+            FROM communities c
+            WHERE c.archived_at IS NULL
+        ) s
+        <if test="!words.isEmpty()">
+            WHERE s.score > 0
+        </if>
+    </sql>
+
+    <select id="countSearch" resultType="long">
+        SELECT count(*) <include refid="searchTarget"/>
+    </select>
+
+    <!-- 当てはまった単語の数が多い順、同じなら作成日時の新しい順（さらに同じなら番号の大きい順） -->
+    <select id="search" resultType="com.campfires.community.CommunitySummary">
+        SELECT s.id, s.name, s.description, s.member_count, s.created_at
+        <include refid="searchTarget"/>
+        ORDER BY s.score DESC, s.created_at DESC, s.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="findMemberCommunities" resultType="com.campfires.community.CommunitySummary">
+        SELECT c.id, c.name, c.description, <include refid="memberCount"/> AS member_count, c.created_at
+        FROM communities c
+        JOIN memberships me ON me.community_id = c.id
+        WHERE me.user_id = #{userId} AND me.role = 'member' AND c.archived_at IS NULL
+        ORDER BY c.created_at DESC, c.id DESC
+    </select>
+
+    <select id="countManaged" resultType="long">
+        SELECT count(*) FROM memberships WHERE user_id = #{userId} AND role IN ('owner', 'staff')
+    </select>
+
+    <select id="findManaged" resultType="com.campfires.community.ManagedCommunity">
+        SELECT c.id, c.name, <include refid="memberCount"/> AS member_count, c.archived_at,
+               me.role AS my_role,
+               (SELECT count(*) FROM join_requests r WHERE r.community_id = c.id AND r.status = 'pending')
+                   AS pending_join_request_count
+        FROM communities c
+        JOIN memberships me ON me.community_id = c.id
+        WHERE me.user_id = #{userId} AND me.role IN ('owner', 'staff')
+        ORDER BY c.created_at DESC, c.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- オーナーのニックネームは、users の表とつなぎ合わせて（JOIN）求める -->
+    <sql id="selectCommunity">
+        SELECT c.id, c.name, c.description, c.owner_id, u.nickname AS owner_nickname,
+               <include refid="memberCount"/> AS member_count, c.archived_at, c.created_at
+        FROM communities c
+        JOIN users u ON u.id = c.owner_id
+        WHERE c.id = #{id}
+    </sql>
+
+    <select id="findById" resultType="com.campfires.community.Community">
+        <include refid="selectCommunity"/>
+    </select>
+
+    <!-- FOR UPDATE OF c：つなぎ合わせた表のうち、コミュニティの行だけをロックする -->
+    <select id="findByIdForUpdate" resultType="com.campfires.community.Community">
+        <include refid="selectCommunity"/>
+        FOR UPDATE OF c
+    </select>
+
+    <select id="insert" resultType="long" flushCache="true">
+        INSERT INTO communities (name, description, owner_id)
+        VALUES (#{name}, #{description}, #{ownerId})
+        RETURNING id
+    </select>
+
+    <update id="update">
+        UPDATE communities SET name = #{name}, description = #{description} WHERE id = #{id}
+    </update>
+
+    <update id="archive">
+        UPDATE communities SET archived_at = now() WHERE id = #{id} AND archived_at IS NULL
+    </update>
+
+    <update id="unarchive">
+        UPDATE communities SET archived_at = NULL WHERE id = #{id}
+    </update>
+</mapper>
