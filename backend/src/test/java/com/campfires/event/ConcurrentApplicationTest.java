@@ -121,4 +121,64 @@ class ConcurrentApplicationTest {
         assertThat(result.applied()).isEqualTo(10);
         assertThat(result.waitlisted()).isEqualTo(USERS - 10);
     }
+
+    /**
+     * 【何のため】承認の方法が手動のイベントで、承認待ちの99人を同時に承認しても、定員5人を超えないことを確かめる（Issue #43）。
+     * 承認も、申込みと同じく、イベントの行をロックしてから人数を数えるので、超えないはず。
+     */
+    @Test
+    void 承認待ちを同時に承認しても定員を超えない() throws Exception {
+        String prefix = UUID.randomUUID().toString();
+        List<Long> userIds = jdbcTemplate.queryForList("""
+                INSERT INTO users (real_name, nickname, email, password_hash, policies_agreed_at, policies_version)
+                SELECT '同時', '同時', ? || '-' || n || '@example.com', 'x', now(), 'test'
+                FROM generate_series(1, ?) AS n
+                RETURNING id
+                """, Long.class, prefix, USERS);
+        long ownerId = userIds.get(0);
+        List<Long> applicants = userIds.subList(1, userIds.size());
+        long communityId = jdbcTemplate.queryForObject(
+                "INSERT INTO communities (name, owner_id) VALUES ('同時', ?) RETURNING id", Long.class, ownerId);
+        jdbcTemplate.update("INSERT INTO memberships (community_id, user_id, role) VALUES (?, ?, 'owner')",
+                communityId, ownerId);
+        long eventId = jdbcTemplate.queryForObject("""
+                INSERT INTO events (community_id, title, start_at, end_at, application_deadline, location, capacity,
+                                    member_approval, non_member_approval)
+                VALUES (?, '同時', now() + interval '2 days', now() + interval '3 days', now() + interval '1 day', '会場', 5,
+                        'manual', 'manual')
+                RETURNING id
+                """, Long.class, communityId);
+        for (long userId : applicants) {
+            jdbcTemplate.update("INSERT INTO applications (event_id, user_id, status) VALUES (?, ?, 'pending')",
+                    eventId, userId);
+        }
+
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(applicants.size());
+        List<Future<?>> futures = new ArrayList<>();
+        for (long userId : applicants) {
+            futures.add(executor.submit(() -> {
+                start.await();
+                return applicationService.decide(ownerId, communityId, eventId, userId, "approved");
+            }));
+        }
+        start.countDown();
+        int errors = 0;
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                errors++;
+            }
+        }
+        executor.shutdown();
+
+        assertThat(errors).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM applications WHERE event_id = ? AND status = 'applied'", Integer.class, eventId))
+                .isEqualTo(5);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM applications WHERE event_id = ? AND status = 'waitlisted'", Integer.class, eventId))
+                .isEqualTo(applicants.size() - 5);
+    }
 }

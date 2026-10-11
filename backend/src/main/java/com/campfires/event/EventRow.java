@@ -21,6 +21,10 @@ import java.time.Instant;
  * @param capacity            定員
  * @param appliedCount        申込み済みの人数（キャンセル待ちを除く）
  * @param waitlistCount       キャンセル待ちの人数
+ * @param pendingCount        承認待ちの人数
+ * @param memberApproval      コミュニティのメンバーの承認の方法（auto：自動、manual：手動）
+ * @param nonMemberApproval   メンバー以外の承認の方法（auto：自動、manual：手動、closed：受け付けない）
+ * @param started             開始しているかどうか
  * @param ended               終了しているかどうか
  * @param deadlinePassed      申込みの締め切りを過ぎているかどうか
  * @param createdAt           作成した日時
@@ -39,7 +43,19 @@ public record EventRow(
         int capacity,
         long appliedCount,
         long waitlistCount,
+        long pendingCount,
+        String memberApproval,
+        String nonMemberApproval,
+        boolean started,
         boolean ended,
         boolean deadlinePassed,
         Instant createdAt) {
+
+    /**
+     * 【何のため】申し込む人に使う、承認の方法を返す。コミュニティのメンバーかどうかで、使う方法が変わる。
+     * @param member コミュニティのメンバーかどうか
+     */
+    public String approvalFor(boolean member) {
+        return member ? memberApproval : nonMemberApproval;
+    }
 }

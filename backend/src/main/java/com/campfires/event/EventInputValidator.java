@@ -34,9 +34,10 @@ public class EventInputValidator {
 
     /**
      * 【何のため】データをチェックし、通ったら ValidEventInput を返す。通らなければ 400（VALIDATION_ERROR）を投げる。
-     * @param now 今の日時（開始日時が今より後かを確かめる）
+     * @param now     今の日時（開始日時が今より後かを確かめる）
+     * @param current 編集のときは、今のイベント（承認の方法が送られてこなければ、今の値を使う）。作成のときは null
      */
-    public ValidEventInput validate(EventInput input, Instant now) {
+    public ValidEventInput validate(EventInput input, Instant now, EventRow current) {
         // 項目の名前 → エラーの文。LinkedHashMap は、入れた順番を覚えておく入れ物。1つの項目に1つの文だけを入れる
         Map<String, String> errors = new LinkedHashMap<>();
         for (ConstraintViolation<EventInput> violation : validator.validate(input)) {
@@ -67,8 +68,13 @@ public class EventInputValidator {
             errors.forEach((field, message) -> items.add(new FieldErrorItem(field, message)));
             throw ApiException.validation(items);
         }
+        // 承認の方法が送られてこなければ、作成では最初の値（メンバーは自動、メンバー以外は受け付けない）、編集では今の値
+        String memberApproval = input.memberApproval() != null ? input.memberApproval()
+                : current != null ? current.memberApproval() : "auto";
+        String nonMemberApproval = input.nonMemberApproval() != null ? input.nonMemberApproval()
+                : current != null ? current.nonMemberApproval() : "closed";
         return new ValidEventInput(input.title(), input.description(), startAt, endAt, deadline, input.location(),
-                input.capacity());
+                input.capacity(), memberApproval, nonMemberApproval);
     }
 
     /**

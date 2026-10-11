@@ -26,14 +26,17 @@ public class EventService {
     private final NotificationMapper notificationMapper;
     private final CommunityGuard guard;
     private final EventInputValidator inputValidator;
+    private final ApplicationApprovalService approvalService;
 
     public EventService(EventMapper eventMapper, ApplicationMapper applicationMapper,
-            NotificationMapper notificationMapper, CommunityGuard guard, EventInputValidator inputValidator) {
+            NotificationMapper notificationMapper, CommunityGuard guard, EventInputValidator inputValidator,
+            ApplicationApprovalService approvalService) {
         this.eventMapper = eventMapper;
         this.applicationMapper = applicationMapper;
         this.notificationMapper = notificationMapper;
         this.guard = guard;
         this.inputValidator = inputValidator;
+        this.approvalService = approvalService;
     }
 
     /**
@@ -87,7 +90,7 @@ public class EventService {
         if (community.isArchived()) {
             throw ApiException.conflict("COMMUNITY_ARCHIVED", "アーカイブ中のコミュニティでは、イベントを作れません。");
         }
-        ValidEventInput valid = inputValidator.validate(input, eventMapper.now());
+        ValidEventInput valid = inputValidator.validate(input, eventMapper.now(), null);
         long eventId = eventMapper.insert(communityId, valid);
         return detail(requireEvent(communityId, eventId), userId);
     }
@@ -95,6 +98,7 @@ public class EventService {
     /**
      * 【何のため】イベントを編集する。オーナーと運営スタッフだけ。アーカイブ中でも編集できる（要件定義書 5.9）。
      * 定員を、今の申込み済みの人数より少なくできない。締め切り前に定員を増やしたら、キャンセル待ちの人を繰り上げる。
+     * 承認の方法を「自動」に変えたら、承認待ちの申込みを、申し込んだ順にまとめて承認する（要件定義書 5.12）。
      */
     @Transactional
     public EventDetail update(long userId, long communityId, long eventId, EventInput input) {
@@ -104,7 +108,7 @@ public class EventService {
         if (event.ended()) {
             throw ApiException.conflict("EVENT_ENDED", "終了したイベントは編集できません。");
         }
-        ValidEventInput valid = inputValidator.validate(input, eventMapper.now());
+        ValidEventInput valid = inputValidator.validate(input, eventMapper.now(), event);
         if (valid.capacity() < event.appliedCount()) {
             throw ApiException.conflict("CAPACITY_BELOW_APPLIED",
                     "定員を、今の申込み済みの人数（" + event.appliedCount() + "人）より少なくできません。");
@@ -112,6 +116,13 @@ public class EventService {
         eventMapper.update(eventId, valid);
         // 定員が増えた分だけ、キャンセル待ちの人を繰り上げる（締め切り後は繰り上げない。SQL の中で確かめる）
         applicationMapper.promoteWaitlist(eventId);
+        // 「自動」に変えたときは、承認待ちの申込みをまとめて承認する（繰り上げの後なので、承認した人はキャンセル待ちの後ろに並ぶ）
+        if (changedToAuto(event.memberApproval(), valid.memberApproval())) {
+            approvalService.approveAllPending(communityId, eventId, true);
+        }
+        if (changedToAuto(event.nonMemberApproval(), valid.nonMemberApproval())) {
+            approvalService.approveAllPending(communityId, eventId, false);
+        }
         return detail(requireEvent(communityId, eventId), userId);
     }
 
@@ -164,6 +175,11 @@ public class EventService {
             myApplication = applicationMapper.findMyApplication(event.id(), viewerId);
         }
         return EventDetail.of(event, myRole, myApplication);
+    }
+
+    // 承認の方法が、「自動」以外から「自動」に変わったかどうか
+    private static boolean changedToAuto(String before, String after) {
+        return !"auto".equals(before) && "auto".equals(after);
     }
 
     private static ApiException notFound() {

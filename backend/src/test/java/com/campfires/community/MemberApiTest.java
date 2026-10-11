@@ -176,7 +176,7 @@ class MemberApiTest extends ApiTestBase {
                 VALUES (?, 'イベント', now() + interval '2 days', now() + interval '3 days', now() + interval '1 day', '会場', 10)
                 RETURNING id
                 """, Long.class, id);
-        jdbcTemplate.update("INSERT INTO applications (event_id, user_id, status) VALUES (?, ?, 'applied')",
+        jdbcTemplate.update("INSERT INTO applications (event_id, user_id, status, queued_at) VALUES (?, ?, 'applied', now())",
                 eventId, member.id());
 
         mockMvc.perform(as(member, delete("/api/communities/" + id + "/members/" + owner.id())))

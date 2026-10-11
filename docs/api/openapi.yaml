@@ -913,6 +913,9 @@ paths:
         - 定員を、今の申込み済みの人数より少なくできない（要件定義書 5.2）
         - 終了したイベントは編集できない
         - 締め切り前に定員を増やしたときは、増えた分だけキャンセル待ちの人を繰り上げる
+        - 承認の方法を「自動」に変えたときは、承認待ちの申込みを、申し込んだ順にまとめて承認する（要件定義書 5.12）。
+          定員を超えた分は、キャンセル待ちになる
+        - 承認の方法を送らなかったときは、今のまま
 
         返す code
         - VALIDATION_ERROR（400）：入力が正しくない
@@ -952,7 +955,8 @@ paths:
       summary: イベントを削除する（F-10、S-10）
       description: |
         開催前のイベントを削除します。オーナーと運営スタッフだけができます。
-        申込み（キャンセル待ちを含む）も一緒に削除し、申し込んでいた人にお知らせを送ります（F-20、要件定義書 5.10）。
+        申込み（承認待ち、キャンセル待ちを含む）も一緒に削除し、申し込んでいた人にお知らせを送ります（F-20、要件定義書 5.10）。
+        却下された人には、お知らせを送りません。
         終了したイベントは、参加の記録として残すため、削除できません。
 
         返す code
@@ -988,8 +992,8 @@ paths:
         イベントの申込者を返します。オーナーと運営スタッフだけができます。
         返す名前はニックネームだけで、本名は返しません（要件定義書 5.6）。
         アカウントを削除した人は、ニックネームが null になります。
-        並び順：申込み済みの人を申し込んだ日時の古い順、そのあとにキャンセル待ちの人を順番どおりに並べる。
-        キャンセルした人は含めません。終了したイベントでも見られます。
+        並び順：承認待ちの人を申し込んだ順、申込み済みの人を席を取った順、キャンセル待ちの人を順番どおり、の順に並べる。
+        キャンセルした人と、却下した人は含めません。終了したイベントでも見られます。
 
         返す code
         - FORBIDDEN（403）：オーナーでも運営スタッフでもない
@@ -1018,16 +1022,19 @@ paths:
       operationId: applyToEvent
       summary: イベントに申し込む（F-12、F-14、F-15、S-09）
       description: |
-        自分を、このイベントに申し込みます。そのコミュニティのメンバー（オーナー、運営スタッフを含む）だけができます。
-        - 空きがあれば「申込み済み」（applied）になる
-        - 満席なら「キャンセル待ち」（waitlisted）になる（F-15。MVP の後半で作る。それまでは EVENT_FULL を返す）
+        自分を、このイベントに申し込みます。
+        だれが申し込めるか、すぐに席を取るかは、イベントの承認の方法で決まります（要件定義書 5.12）。
+        - コミュニティのメンバー（オーナー、運営スタッフを含む）には memberApproval、メンバー以外には nonMemberApproval を使う
+        - auto（自動）：空きがあれば「申込み済み」（applied）、満席なら「キャンセル待ち」（waitlisted）になる（F-15）
+        - manual（手動）：「承認待ち」（pending）になる。席は、承認されたときに取る
+        - closed（受け付けない。メンバー以外だけ）：申し込めない
         - 残り1枠に何人が同時に申し込んでも、定員を超えないようにする（F-14）
 
         返す code
-        - NOT_MEMBER（403）：コミュニティのメンバーではない
-        - ALREADY_APPLIED（409）：すでに申し込んでいる（キャンセル待ちを含む）
+        - NOT_MEMBER（403）：メンバー以外の申込みを受け付けていないイベントに、メンバー以外が申し込んだ
+        - ALREADY_APPLIED（409）：すでに申し込んでいる（承認待ち、キャンセル待ちを含む）
+        - APPLICATION_REJECTED（409）：このイベントへの申込みは却下されている（申し込み直せない）
         - APPLICATION_DEADLINE_PASSED（409）：申込み締め切り日時を過ぎている
-        - EVENT_FULL（409）：満席（キャンセル待ちを作るまでの間だけ使う）
       tags: [applications]
       security:
         - sessionCookie: []
@@ -1057,7 +1064,7 @@ paths:
       operationId: cancelMyApplication
       summary: 自分の申込みをキャンセルする（F-12、F-16、F-20、S-09）
       description: |
-        自分の申込み（キャンセル待ちを含む）を取り消します。
+        自分の申込み（承認待ち、キャンセル待ちを含む）を取り消します。却下された申込みは取り消せません。
         URL を /applications/{番号} ではなく /my-application（自分の申込み）にしているのは、
         他人の申込みを取り消せないことを、URL の段階ではっきりさせるため。
 
@@ -1065,9 +1072,10 @@ paths:
         - 締め切り前：取り消す。申込み済みの人が取り消したときは、キャンセル待ちの先頭の人を繰り上げる（F-16）
         - 締め切り後：取り消す。繰り上げは行わない。オーナーと運営スタッフにお知らせを送る（F-20、要件定義書 5.10）。
           画面は、呼ぶ前に「原則としてキャンセルはできません」という確認を出す
+        - 承認待ち：席を使っていないので、締め切りの前でも後でも、取り消すだけ（繰り上げもお知らせもしない）
 
         返す code
-        - NOT_APPLIED（409）：申し込んでいない
+        - NOT_APPLIED（409）：申し込んでいない（却下された申込みを含む）
         - EVENT_ENDED（409）：終了したイベント
       tags: [applications]
       security:
@@ -1076,6 +1084,56 @@ paths:
       responses:
         '204':
           description: 取り消した
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/communities/{communityId}/events/{eventId}/applications/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/CommunityId'
+      - $ref: '#/components/parameters/EventId'
+      - $ref: '#/components/parameters/UserId'
+    patch:
+      operationId: decideApplication
+      summary: 承認待ちの申込みを承認・却下する（F-23、S-11）
+      description: |
+        承認待ちの申込みを、承認または却下します。オーナーと運営スタッフだけができます（要件定義書 5.12）。
+        - 承認：席を取る。空きがあれば「申込み済み」、満席なら「キャンセル待ち」（順番は承認された順）
+        - 却下：「却下」になる。却下された人は、同じイベントに申し込み直せない
+        - どちらも、申し込んだ人にお知らせを送る（F-20）
+        - 承認・却下できるのは、イベントの開始日時まで
+        - 何人を同時に承認しても、定員を超えないようにする（F-14）
+
+        返す code
+        - VALIDATION_ERROR（400）：status が approved でも rejected でもない
+        - FORBIDDEN（403）：オーナーでも運営スタッフでもない
+        - NOT_FOUND（404）：その人の申込みがない
+        - EVENT_STARTED（409）：イベントが開始している
+        - APPLICATION_ALREADY_DECIDED（409）：承認待ちではない（すでに承認・却下された、など）
+      tags: [applications]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideApplicationRequest'
+      responses:
+        '200':
+          description: 承認・却下した。処理した後の申込みを返す
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1786,7 +1844,7 @@ components:
       description: |
         イベントを作成・編集するときに送るデータ。
         日時の前後関係のルール：今 < 開始日時、申込み締め切り日時 < 開始日時 < 終了日時
-      required: [title, description, startAt, endAt, applicationDeadline, location, capacity]
+      required: [title, description, startAt, endAt, applicationDeadline, location, capacity, memberApproval, nonMemberApproval]
       properties:
         title:
           type: string
@@ -1827,13 +1885,38 @@ components:
           maximum: 1000
           description: 定員。1〜1000人
           example: 30
+        memberApproval:
+          $ref: '#/components/schemas/MemberApproval'
+        nonMemberApproval:
+          $ref: '#/components/schemas/NonMemberApproval'
+
+    MemberApproval:
+      type: string
+      description: |
+        コミュニティのメンバー（オーナー、運営スタッフを含む）の、参加の承認の方法（要件定義書 5.12）。
+        - auto：自動。申し込むとすぐに、申込み済み（満席ならキャンセル待ち）になる
+        - manual：手動。申し込むと承認待ちになり、オーナーか運営スタッフが承認・却下する
+        作成で送らなかったときは auto。編集で送らなかったときは、今のまま
+      enum: [auto, manual]
+      example: auto
+
+    NonMemberApproval:
+      type: string
+      description: |
+        メンバー以外の、参加の承認の方法（要件定義書 5.12）。
+        - auto：自動
+        - manual：手動
+        - closed：受け付けない（メンバー以外は申し込めない）
+        作成で送らなかったときは closed。編集で送らなかったときは、今のまま
+      enum: [auto, manual, closed]
+      example: closed
 
     EventDetail:
       description: イベントの詳細。一覧の情報に、説明、場所、締め切り、自分との関係などを足したもの
       allOf:
         - $ref: '#/components/schemas/EventSummary'
         - type: object
-          required: [description, location, applicationDeadline, waitlistCount, communityArchivedAt, myRole, myApplication, createdAt]
+          required: [description, location, applicationDeadline, waitlistCount, pendingCount, memberApproval, nonMemberApproval, communityArchivedAt, myRole, myApplication, createdAt]
           properties:
             description:
               type: string
@@ -1852,12 +1935,20 @@ components:
               type: integer
               description: キャンセル待ちの人数
               example: 0
+            pendingCount:
+              type: integer
+              description: 承認待ちの人数（定員には数えない）
+              example: 0
+            memberApproval:
+              $ref: '#/components/schemas/MemberApproval'
+            nonMemberApproval:
+              $ref: '#/components/schemas/NonMemberApproval'
             communityArchivedAt:
               $ref: '#/components/schemas/ArchivedAt'
             myRole:
               description: |
                 コミュニティでの自分の立場。メンバーでない、またはログインしていないときは null。
-                画面は、これを見て「申し込む」ボタン（メンバーだけ）や、管理画面へのリンク（オーナー、運営スタッフ）を出し分ける
+                画面は、これと承認の方法を見て「申し込む」ボタンや、管理画面へのリンク（オーナー、運営スタッフ）を出し分ける
               oneOf:
                 - $ref: '#/components/schemas/CommunityRole'
                 - type: 'null'
@@ -1877,10 +1968,12 @@ components:
     ApplicationStatus:
       type: string
       description: |
-        申込みの状態。
+        申込みの状態（要件定義書 5.12）。
+        - pending：承認待ち（席はまだ取っていない）
         - applied：申込み済み
         - waitlisted：キャンセル待ち
-      enum: [applied, waitlisted]
+        - rejected：却下（自分の申込みの状況でだけ返す。申込者の一覧には含めない）
+      enum: [pending, applied, waitlisted, rejected]
       example: applied
 
     MyApplication:
@@ -1919,6 +2012,16 @@ components:
           description: 申し込んだ日時（世界標準時）
           example: '2026-10-05T12:00:00Z'
 
+    DecideApplicationRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: approved（承認する）か rejected（却下する）
+          enum: [approved, rejected]
+          example: approved
+
     ApplicationListResponse:
       description: 申込者の一覧の返事
       allOf:
@@ -1939,7 +2042,9 @@ components:
         お知らせの種類（要件定義書 5.10）。画面は、種類ごとに表示する文を組み立てる。
         - late_cancellation：締め切り後に、申込みがキャンセルされた（オーナーと運営スタッフあて）
         - event_deleted：申し込んでいたイベントが削除された（申し込んでいた人あて）
-      enum: [late_cancellation, event_deleted]
+        - application_approved：参加が承認された（申し込んだ人あて。要件定義書 5.12）
+        - application_rejected：参加が却下された（申し込んだ人あて）
+      enum: [late_cancellation, event_deleted, application_approved, application_rejected]
       example: late_cancellation
 
     Notification:

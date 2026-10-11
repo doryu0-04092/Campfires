@@ -16,8 +16,24 @@ import styles from './EventCard.module.css'
 type EventCardProps = {
   // 表示するイベント
   event: EventSummary
-  // 自分の申込みの状況。渡されたときは、タイトルの横に「申込み済み」「キャンセル待ち」の札を出す
+  // 自分の申込みの状況。渡されたときは、タイトルの横に「申込み済み」「キャンセル待ち」などの札を出す
   myApplication?: MyApplication
+}
+
+/**
+ * 【何のため】申込みの状況を、札に出す文にする。
+ */
+function statusLabel(application: MyApplication): string {
+  switch (application.status) {
+    case 'applied':
+      return '申込み済み'
+    case 'waitlisted':
+      return `キャンセル待ち ${application.waitlistPosition}番目`
+    case 'pending':
+      return '承認待ち'
+    case 'rejected':
+      return '承認されませんでした'
+  }
 }
 
 /**
@@ -35,7 +51,7 @@ function EventCard({ event, myApplication }: EventCardProps) {
         <Link to={`/communities/${event.communityId}/events/${event.id}`}>{event.title}</Link>
         {myApplication && (
           <span className={`${listStyles.badge} ${myApplication.status === 'applied' ? listStyles.badgeAccent : listStyles.badgeMuted}`}>
-            {myApplication.status === 'applied' ? '申込み済み' : `キャンセル待ち ${myApplication.waitlistPosition}番目`}
+            {statusLabel(myApplication)}
           </span>
         )}
       </h2>

@@ -108,8 +108,8 @@ class AccountApiTest {
     /** 【何のため】申込みを作る。appliedMinutes は申し込んだ順番（小さいほど先）。 */
     private void apply(long eventId, long userId, String status, int appliedMinutes) {
         jdbcTemplate.update("""
-                INSERT INTO applications (event_id, user_id, status, applied_at)
-                VALUES (?, ?, ?, now() - interval '1 day' + make_interval(mins => ?))
+                INSERT INTO applications (event_id, user_id, status, applied_at, queued_at)
+                SELECT ?, ?, ?, t, t FROM (SELECT now() - interval '1 day' + make_interval(mins => ?) AS t) x
                 """, eventId, userId, status, appliedMinutes);
     }
 

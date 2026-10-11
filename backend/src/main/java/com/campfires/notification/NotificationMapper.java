@@ -33,6 +33,13 @@ public interface NotificationMapper {
     void insertEventDeleted(@Param("eventId") long eventId, @Param("operatorUserId") long operatorUserId);
 
     /**
+     * 【何のため】参加の承認・却下を、申し込んだ人に知らせる（要件定義書 5.10、5.12）。
+     * @param type application_approved（承認された）か application_rejected（却下された）
+     */
+    void insertApplicationDecided(@Param("eventId") long eventId, @Param("userId") long userId,
+            @Param("type") String type);
+
+    /**
      * 【何のため】自分あてのお知らせの数を数える。
      */
     long countByUser(@Param("userId") long userId);

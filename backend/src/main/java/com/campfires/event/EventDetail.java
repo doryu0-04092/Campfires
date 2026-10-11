@@ -19,6 +19,9 @@ import java.time.Instant;
  * @param location            場所
  * @param applicationDeadline 申込み締め切り日時
  * @param waitlistCount       キャンセル待ちの人数
+ * @param pendingCount        承認待ちの人数
+ * @param memberApproval      コミュニティのメンバーの承認の方法（auto：自動、manual：手動）
+ * @param nonMemberApproval   メンバー以外の承認の方法（auto：自動、manual：手動、closed：受け付けない）
  * @param communityArchivedAt コミュニティをアーカイブした日時。アーカイブしていなければ null
  * @param myRole              コミュニティでの自分の立場。メンバーでない、ログインしていなければ null
  * @param myApplication       自分の申込みの状況。申し込んでいない、ログインしていなければ null
@@ -37,6 +40,9 @@ public record EventDetail(
         String location,
         Instant applicationDeadline,
         long waitlistCount,
+        long pendingCount,
+        String memberApproval,
+        String nonMemberApproval,
         Instant communityArchivedAt,
         String myRole,
         MyApplication myApplication,
@@ -48,7 +54,8 @@ public record EventDetail(
     public static EventDetail of(EventRow row, String myRole, MyApplication myApplication) {
         return new EventDetail(row.id(), row.communityId(), row.communityName(), row.title(), row.startAt(),
                 row.endAt(), row.capacity(), row.capacity() - row.appliedCount(), row.description(), row.location(),
-                row.applicationDeadline(), row.waitlistCount(), row.communityArchivedAt(), myRole, myApplication,
+                row.applicationDeadline(), row.waitlistCount(), row.pendingCount(), row.memberApproval(),
+                row.nonMemberApproval(), row.communityArchivedAt(), myRole, myApplication,
                 row.createdAt());
     }
 }

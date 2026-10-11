@@ -14,6 +14,8 @@ import java.time.Instant;
  * @param applicationDeadline 申込み締め切り日時
  * @param location            場所
  * @param capacity            定員
+ * @param memberApproval      コミュニティのメンバーの承認の方法（auto か manual）
+ * @param nonMemberApproval   メンバー以外の承認の方法（auto、manual、closed）
  */
 public record ValidEventInput(
         String title,
@@ -22,5 +24,7 @@ public record ValidEventInput(
         Instant endAt,
         Instant applicationDeadline,
         String location,
-        int capacity) {
+        int capacity,
+        String memberApproval,
+        String nonMemberApproval) {
 }

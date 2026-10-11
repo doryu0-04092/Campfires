@@ -8,7 +8,7 @@ package com.campfires.event;
  * @param applicationId  申込みの番号
  * @param eventId        イベントの番号
  * @param userId         申し込んだユーザーの番号
- * @param status         applied（申込み済み）か waitlisted（キャンセル待ち）
+ * @param status         pending（承認待ち）、applied（申込み済み）、waitlisted（キャンセル待ち）のどれか
  * @param deadlinePassed 申込みの締め切りを過ぎているかどうか
  */
 public record CancelTarget(long applicationId, long eventId, long userId, String status, boolean deadlinePassed) {
@@ -18,5 +18,12 @@ public record CancelTarget(long applicationId, long eventId, long userId, String
      */
     public boolean isApplied() {
         return "applied".equals(status);
+    }
+
+    /**
+     * 【何のため】承認待ちかどうか。
+     */
+    public boolean isPending() {
+        return "pending".equals(status);
     }
 }

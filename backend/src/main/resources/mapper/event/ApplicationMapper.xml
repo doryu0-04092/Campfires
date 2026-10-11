@@ -2,7 +2,9 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!--
   【役割】申込み（applications テーブル）の SQL（ApplicationMapper.java のメソッドと、id の名前で結び付く）。
-  【なぜ必要か】申込み、取り消し、繰り上げのルール（要件定義書 5.2、5.3）を、SQL で行うため。
+  【なぜ必要か】申込み、取り消し、承認・却下、繰り上げのルール（要件定義書 5.2、5.3、5.12）を、SQL で行うため。
+  席の順番（キャンセル待ちの順番、繰り上げの順番）は queued_at で決める。
+  queued_at は、自動なら申し込んだ日時、手動なら承認された日時（承認待ちの間は NULL で、順番を取らない）。
 -->
 <mapper namespace="com.campfires.event.ApplicationMapper">
 
@@ -32,13 +34,13 @@
         </constructor>
     </resultMap>
 
-    <!-- 締め切りを過ぎているかは、データベースの今の日時（now()）で判断する -->
+    <!-- 締め切りを過ぎているかは、データベースの今の日時（now()）で判断する。却下された申込みは、取り消せない -->
     <select id="findCancelTarget" resultMap="cancelTarget">
         SELECT a.id AS application_id, a.event_id, a.user_id, a.status,
                e.application_deadline &lt;= now() AS deadline_passed
         FROM applications a
         JOIN events e ON e.id = a.event_id
-        WHERE a.event_id = #{eventId} AND a.user_id = #{userId}
+        WHERE a.event_id = #{eventId} AND a.user_id = #{userId} AND a.status &lt;&gt; 'rejected'
     </select>
 
     <delete id="delete">
@@ -47,53 +49,98 @@
 
     <!--
       キャンセル待ちの何番目か：同じイベントのキャンセル待ちのうち、自分より先に（または同じ日時で番号が小さく）
-      申し込んだ人の数 + 自分。(日時, 番号) &lt;= (日時, 番号) は、2つの値を順番に比べる書き方
+      席の順番を取った人の数 + 自分。(日時, 番号) &lt;= (日時, 番号) は、2つの値を順番に比べる書き方
     -->
+    <sql id="waitlistPosition">
+        CASE WHEN my.status = 'waitlisted' THEN (
+            SELECT count(*)::int FROM applications w
+            WHERE w.event_id = my.event_id AND w.status = 'waitlisted'
+              AND (w.queued_at, w.id) &lt;= (my.queued_at, my.id)
+        ) END
+    </sql>
+
     <select id="findMyApplication" resultType="com.campfires.event.MyApplication">
-        SELECT my.status,
-               CASE WHEN my.status = 'waitlisted' THEN (
-                   SELECT count(*)::int FROM applications w
-                   WHERE w.event_id = my.event_id AND w.status = 'waitlisted'
-                     AND (w.applied_at, w.id) &lt;= (my.applied_at, my.id)
-               ) END AS waitlist_position,
-               my.applied_at
+        SELECT my.status, <include refid="waitlistPosition"/> AS waitlist_position, my.applied_at
         FROM applications my
         WHERE my.event_id = #{eventId} AND my.user_id = #{userId}
     </select>
 
     <!--
       申し込んだ日時は clock_timestamp()（この SQL を実行した瞬間の日時）にする。
-      now() は「トランザクションを始めた日時」なので、同時に申し込んだ人の順番が、ロックを待った順とずれることがあるため
+      now() は「トランザクションを始めた日時」なので、同時に申し込んだ人の順番が、ロックを待った順とずれることがあるため。
+      承認待ちのときは、席の順番（queued_at）を取らない
     -->
     <insert id="insert">
-        INSERT INTO applications (event_id, user_id, status, applied_at)
-        VALUES (#{eventId}, #{userId}, #{status}, clock_timestamp())
+        INSERT INTO applications (event_id, user_id, status, applied_at, queued_at)
+        VALUES (#{eventId}, #{userId}, #{status}, clock_timestamp(),
+                CASE WHEN #{status} = 'pending' THEN NULL ELSE clock_timestamp() END)
     </insert>
 
     <select id="countApplications" resultType="long">
-        SELECT count(*) FROM applications WHERE event_id = #{eventId}
+        SELECT count(*) FROM applications WHERE event_id = #{eventId} AND status &lt;&gt; 'rejected'
     </select>
 
-    <!--
-      row_number() OVER (PARTITION BY 状態 ORDER BY …) は、状態ごとに、並べた順に 1, 2, 3… の番号を付ける（ウィンドウ関数）。
-      キャンセル待ちの人の、この番号が「何番目か」になる
-    -->
+    <!-- 申込者の一覧の列。row_number() OVER (…) は、状態ごとに、並べた順に 1, 2, 3… の番号を付ける（ウィンドウ関数） -->
+    <sql id="applicationColumns">
+        a.user_id, u.nickname, a.status,
+        CASE WHEN a.status = 'waitlisted'
+             THEN (row_number() OVER (PARTITION BY a.status ORDER BY a.queued_at, a.id))::int
+        END AS waitlist_position,
+        a.applied_at
+    </sql>
+
+    <!-- 承認待ち → 申込み済み → キャンセル待ちの順。承認待ちは申し込んだ順、ほかは席の順番どおり -->
     <select id="findApplications" resultType="com.campfires.event.ApplicationRow">
-        SELECT a.user_id, u.nickname, a.status,
-               CASE WHEN a.status = 'waitlisted'
-                    THEN (row_number() OVER (PARTITION BY a.status ORDER BY a.applied_at, a.id))::int
-               END AS waitlist_position,
-               a.applied_at
+        SELECT <include refid="applicationColumns"/>
         FROM applications a
         JOIN users u ON u.id = a.user_id
-        WHERE a.event_id = #{eventId}
-        ORDER BY CASE a.status WHEN 'applied' THEN 0 ELSE 1 END, a.applied_at, a.id
+        WHERE a.event_id = #{eventId} AND a.status &lt;&gt; 'rejected'
+        ORDER BY CASE a.status WHEN 'pending' THEN 0 WHEN 'applied' THEN 1 ELSE 2 END,
+                 COALESCE(a.queued_at, a.applied_at), a.id
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <!--
+      1人分を返す。キャンセル待ちの順番は、同じイベントの全員で数えてから、その人の行だけを取り出す
+      （WHERE で1人に絞ってから数えると、いつも1番目になってしまうため、サブクエリの外で絞る）
+    -->
+    <select id="findApplication" resultType="com.campfires.event.ApplicationRow">
+        SELECT x.user_id, x.nickname, x.status, x.waitlist_position, x.applied_at
+        FROM (
+            SELECT <include refid="applicationColumns"/>
+            FROM applications a
+            JOIN users u ON u.id = a.user_id
+            WHERE a.event_id = #{eventId}
+        ) x
+        WHERE x.user_id = #{userId}
+    </select>
+
+    <!-- member が true ならメンバーの申込み、false ならメンバー以外の申込み（EXISTS：メンバーの行があるか） -->
+    <select id="findPending" resultType="com.campfires.event.PendingApplication">
+        SELECT a.user_id
+        FROM applications a
+        JOIN events e ON e.id = a.event_id
+        WHERE a.event_id = #{eventId} AND a.status = 'pending'
+          AND <if test="!member">NOT</if> EXISTS (
+              SELECT 1 FROM memberships m WHERE m.community_id = e.community_id AND m.user_id = a.user_id
+          )
+        ORDER BY a.applied_at, a.id
+    </select>
+
+    <!-- status = 'pending' の条件を付けて書き換える（2人が同時に処理しても、先に書き換えた1人だけが成功する） -->
+    <update id="approve">
+        UPDATE applications SET status = #{status}, queued_at = clock_timestamp()
+        WHERE event_id = #{eventId} AND user_id = #{userId} AND status = 'pending'
+    </update>
+
+    <update id="reject">
+        UPDATE applications SET status = 'rejected'
+        WHERE event_id = #{eventId} AND user_id = #{userId} AND status = 'pending'
+    </update>
+
+    <!--
       繰り上げる人数 = 定員 - 申込み済みの人数（マイナスにならないよう GREATEST で 0 以上にする）。
-      キャンセル待ちを、申し込んだ順（同じ日時なら番号の順）に並べて、その人数だけ applied に変える。
+      キャンセル待ちを、席の順番（同じ日時なら番号の順）に並べて、その人数だけ applied に変える。
       締め切りを過ぎたイベントでは、繰り上げない（最後の条件）
     -->
     <update id="promoteWaitlist">
@@ -101,7 +148,7 @@
         WHERE id IN (
             SELECT w.id FROM applications w
             WHERE w.event_id = #{eventId} AND w.status = 'waitlisted'
-            ORDER BY w.applied_at, w.id
+            ORDER BY w.queued_at, w.id
             LIMIT GREATEST(
                 (SELECT capacity FROM events WHERE id = #{eventId})
                 - (SELECT count(*) FROM applications WHERE event_id = #{eventId} AND status = 'applied'),

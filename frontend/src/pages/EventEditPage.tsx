@@ -71,15 +71,15 @@ function EventEditPage() {
 function DeleteEventSection({ event, onDeleted }: { event: EventDetail; onDeleted: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // 申込みの人数（申込み済み ＋ キャンセル待ち）
-  const applicantCount = event.capacity - event.remainingSeats + event.waitlistCount
+  // 申込みの人数（申込み済み ＋ キャンセル待ち ＋ 承認待ち）
+  const applicantCount = event.capacity - event.remainingSeats + event.waitlistCount + event.pendingCount
 
   async function handleDelete() {
     const ok = window.confirm(
       [
         `「${event.title}」を削除しますか？`,
         applicantCount > 0
-          ? `申込み（${applicantCount}人。キャンセル待ちを含む）も削除され、申し込んでいた人にお知らせが届きます。`
+          ? `申込み（${applicantCount}人。キャンセル待ち・承認待ちを含む）も削除され、申し込んでいた人にお知らせが届きます。`
           : '申込みはありません。',
         '削除したイベントは、元に戻せません。',
       ].join('\n'),

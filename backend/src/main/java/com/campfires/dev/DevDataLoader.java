@@ -195,13 +195,17 @@ public class DevDataLoader implements ApplicationRunner {
             Instant startAt = isPast ? now.minus(DAY.multipliedBy(i + 1)) : now.plus(DAY.multipliedBy((i % 60) + 1));
             int capacity = 10 + (i % 4) * 10;
             Instant createdAt = now.minus(HOUR.multipliedBy(EVENT_COUNT - i));
+            // 参加の承認の方法（Issue #43）：20件に1件はメンバーもメンバー以外も手動、別の20件に1件はメンバー以外も自動。
+            // それ以外は最初の値（メンバーは自動、メンバー以外は受け付けない）
+            String memberApproval = i % 20 == 10 ? "manual" : "auto";
+            String nonMemberApproval = i % 20 == 10 ? "manual" : i % 20 == 15 ? "auto" : "closed";
             jdbc.update("""
                     INSERT INTO events (id, community_id, title, description, start_at, end_at, application_deadline,
-                                        location, capacity, created_at)
-                    OVERRIDING SYSTEM VALUE VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        location, capacity, member_approval, non_member_approval, created_at)
+                    OVERRIDING SYSTEM VALUE VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, id, communityId, title, DESCRIPTIONS[i % DESCRIPTIONS.length], ts(startAt),
                     ts(startAt.plus(HOUR.multipliedBy(2))), ts(startAt.minus(DAY)), LOCATIONS[i % LOCATIONS.length],
-                    capacity, ts(createdAt));
+                    capacity, memberApproval, nonMemberApproval, ts(createdAt));
             events.add(new EventSeed(id, communityId, title, capacity, createdAt));
         }
         resetIdentity("events");
@@ -209,7 +213,8 @@ public class DevDataLoader implements ApplicationRunner {
     }
 
     private void insertApplications(List<EventSeed> events) {
-        String sql = "INSERT INTO applications (event_id, user_id, status, applied_at) VALUES (?, ?, ?, ?)";
+        // 申込み済み・キャンセル待ちは、席の順番（queued_at）も、申し込んだ日時と同じにする
+        String sql = "INSERT INTO applications (event_id, user_id, status, applied_at, queued_at) VALUES (?, ?, ?, ?, ?)";
         for (int i = 0; i < events.size(); i++) {
             EventSeed event = events.get(i);
             // 5件に1件は満席、それ以外は定員の範囲で、参加者01から順に申し込む
@@ -217,16 +222,22 @@ public class DevDataLoader implements ApplicationRunner {
             // 申込みは、イベントが作られた10分後（必ず今より前にする。キャンセル待ちの順番がおかしくならないように）
             Instant appliedAt = event.createdAt().plus(Duration.ofMinutes(10));
             for (int n = 0; n < appliedCount; n++) {
-                jdbc.update(sql, event.id(), FIRST_DUMMY_USER_ID + n, "applied", ts(appliedAt));
+                jdbc.update(sql, event.id(), FIRST_DUMMY_USER_ID + n, "applied", ts(appliedAt), ts(appliedAt));
             }
             // 満席で、定員が30人以下のイベントには、キャンセル待ちを2人入れる
             if (appliedCount == event.capacity() && event.capacity() <= 30) {
                 for (int n = 0; n < 2; n++) {
+                    Instant waitlistedAt = appliedAt.plus(Duration.ofMinutes(n + 1));
                     jdbc.update(sql, event.id(), FIRST_DUMMY_USER_ID + event.capacity() + n, "waitlisted",
-                            ts(appliedAt.plus(Duration.ofMinutes(n + 1))));
+                            ts(waitlistedAt), ts(waitlistedAt));
                 }
             }
         }
+        // 承認待ちの申込み（承認・却下を試すため）：手動のイベント 11 に、じろう（メンバー）とさくら（メンバー以外）
+        EventSeed manualEvent = events.get(10);
+        Instant pendingAt = manualEvent.createdAt().plus(Duration.ofMinutes(30));
+        jdbc.update(sql, manualEvent.id(), 3, "pending", ts(pendingAt), null);
+        jdbc.update(sql, manualEvent.id(), 4, "pending", ts(pendingAt.plus(Duration.ofMinutes(1))), null);
     }
 
     // ---------- お知らせ（偽の API の notifications.ts） ----------

@@ -14,7 +14,7 @@ import java.time.Instant;
  * @param endAt            終了日時
  * @param capacity         定員
  * @param remainingSeats   残りの枠数
- * @param status           自分の申込みの状態（applied か waitlisted）
+ * @param status           自分の申込みの状態（pending、applied、waitlisted、rejected のどれか）
  * @param waitlistPosition キャンセル待ちの何番目か。申込み済みなら null
  * @param appliedAt        申し込んだ日時
  */

@@ -9,7 +9,7 @@ import com.campfires.account.UserRef;
  * 【なぜ必要か】申込者は、ニックネームだけで表す（本名は返さない。要件定義書 5.6）。
  *
  * @param user             申し込んだ人
- * @param status           applied（申込み済み）か waitlisted（キャンセル待ち）
+ * @param status           pending（承認待ち）、applied（申込み済み）、waitlisted（キャンセル待ち）のどれか
  * @param waitlistPosition キャンセル待ちの何番目か。申込み済みなら null
  * @param appliedAt        申し込んだ日時
  */
