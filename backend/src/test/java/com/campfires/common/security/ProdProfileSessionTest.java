@@ -4,6 +4,7 @@ import static com.campfires.CsrfTestSupport.csrfToken;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -75,5 +76,19 @@ class ProdProfileSessionTest {
         mockMvc.perform(get("/api/me").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(email));
+        // 30分操作がなければ、ログアウトになる（データベースに保存したセッションにも、同じ時間が設定されている）
+        assertThat(jdbcTemplate.queryForObject("SELECT max(max_inactive_interval) FROM spring_session", Integer.class))
+                .isEqualTo(1800);
+    }
+
+    /**
+     * 【何のため】HTTPS の通信には、HSTS のヘッダー（このサイトは HTTPS だけで開く、とブラウザに覚えさせる）が付くことを確かめる。
+     * 本番では、ロードバランサーが HTTPS を受け、server.forward-headers-strategy で、HTTPS で来たことを正しく扱う。
+     */
+    @Test
+    void HTTPSの通信にはHSTSのヘッダーが付く() throws Exception {
+        mockMvc.perform(get("/api/health").secure(true))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Strict-Transport-Security", org.hamcrest.Matchers.containsString("max-age=")));
     }
 }

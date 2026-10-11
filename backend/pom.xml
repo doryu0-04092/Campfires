@@ -40,6 +40,17 @@
 	<properties>
 		<!-- 使う Java の版（長期サポート版の 21） -->
 		<java.version>21</java.version>
+		<!--
+		  脆弱性の修正のため、Spring Boot が決めている版を、修正済みの版に上書きする（セキュリティの見直し）。
+		  Spring Boot 4.0.8（4.1.1 も同じ）が使う版には、脆弱性が見つかっている（Trivy で検出）。
+		  Spring Boot の新しい版で直ったら、この上書きは消す（docs/security.md を参照）
+		  - Tomcat 11.0.24：CVE-2026-65182、CVE-2026-65905、CVE-2026-68525（重大）。11.0.25 以降で修正
+		  - Jackson 3.1.5 / 2.21.5：CVE-2026-89407、CVE-2026-89425、CVE-2026-68497、CVE-2026-91776、CVE-2026-91777（高）など。
+		    大きな・深い JSON によるサービス停止など。3.1.7 / 2.21.7 で修正
+		-->
+		<tomcat.version>11.0.26</tomcat.version>
+		<jackson-bom.version>3.1.7</jackson-bom.version>
+		<jackson-2-bom.version>2.21.7</jackson-2-bom.version>
 	</properties>
 
 	<dependencies>
