@@ -9,14 +9,15 @@ Campfires の画面です。React と TypeScript で作り、開発ツールに 
 | コマンド | 内容 |
 |---|---|
 | `npm install` | 必要なパッケージをインストールする。最初に1回だけ実行する |
-| `npm run dev` | 開発用サーバーを起動する。表示された URL（http://localhost:5173）をブラウザで開く |
+| `npm run dev` | 開発用サーバーを起動する。表示された URL（http://localhost:5173）をブラウザで開く。偽の API（MSW）を使う |
+| `npm run dev:api` | 開発用サーバーを、本物の API（backend）につないで起動する。先に backend を起動しておく（[backend/README.md](../backend/README.md)） |
 | `npm run build` | 型をチェックしてから、本番用のファイルを `dist` フォルダに作る |
 | `npm run lint` | 書き方のチェックを行う |
 | `npm run preview` | `npm run build` で作ったファイルを、ブラウザで確認する |
 
 ## 開発用のアカウント
 
-`npm run dev` で開いたときは、偽の API（MSW）が返事をします。次のアカウントでログインできます。パスワードはすべて `campfire2026` です。
+`npm run dev`（偽の API）でも `npm run dev:api`（本物の API）でも、次のアカウントでログインできます。パスワードはすべて `campfire2026` です（開発用の偽の値）。
 
 | メールアドレス | ニックネーム | 立場 |
 |---|---|---|
@@ -25,8 +26,10 @@ Campfires の画面です。React と TypeScript で作り、開発ツールに 
 | `member@example.com` | じろう | Java 勉強会のメンバー |
 | `guest@example.com` | さくら | どのコミュニティにも入っていない |
 
-- 偽のデータはブラウザのメモリの中にだけあり、ページを読み込み直すと最初の状態に戻ります（ログインは Cookie に残るので続きます）
+- 偽の API のデータはブラウザのメモリの中にだけあり、ページを読み込み直すと最初の状態に戻ります（ログインは Cookie に残るので続きます）
+- 本物の API のデータは PostgreSQL に保存され、読み込み直しても残ります。最初の状態に戻す方法は [backend/README.md](../backend/README.md) にあります
 - 偽の API のログインの証明の Cookie には、HttpOnly を付けていません。ブラウザの中で動く偽物では付けられないためです。本物のバックエンドでは付けます
+- 2つの API を切り替えるときは、ログインし直してください（ログインの証明の Cookie が別のものになるため）
 
 ## ファイルの役割と、差分を見るときの視点
 
@@ -87,7 +90,8 @@ Campfires の画面です。React と TypeScript で作り、開発ツールに 
 
 | 名前 | 実行される内容 | 意味 |
 |---|---|---|
-| `dev` | `vite` | 開発用サーバーを起動する |
+| `dev` | `vite` | 開発用サーバーを起動する（偽の API） |
+| `dev:api` | `vite --mode api` | 開発用サーバーを起動する（本物の API）。`.env.api` の設定を読み込む |
 | `build` | `tsc -b && vite build` | TypeScript でチェックし、問題がなければ本番用ファイルを作る |
 | `lint` | `oxlint` | 書き方をチェックする |
 | `preview` | `vite preview` | 本番用ファイルを確認する |

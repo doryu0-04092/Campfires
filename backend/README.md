@@ -17,18 +17,34 @@ Maven は、プロジェクトに入っている `mvnw`（Maven Wrapper）が自
 
 | コマンド | 内容 |
 |---|---|
-| `./mvnw spring-boot:run` | アプリを起動する。`http://localhost:8080` で API を受け付ける。Docker の PostgreSQL も自動で起動する |
+| `./mvnw spring-boot:run` | アプリを起動する。`http://localhost:8080` で API を受け付ける。Docker の PostgreSQL も自動で起動する。データベースが空なら、開発用の最初のデータを入れる |
 | `./mvnw test` | 自動テストを実行する。テスト用の PostgreSQL を Docker で起動し、終わったら片付ける |
 
 Windows のコマンドプロンプトや PowerShell では、`./mvnw` の代わりに `.\mvnw.cmd` を使います。
 
 起動を止めるときは、ターミナルで `Ctrl + C` を押します。データベースは動いたままになります（次に起動したとき、すぐ使えるように）。止めるときは `docker compose down` を実行します。
 
+画面から使うときは、`frontend` で `npm run dev:api` を実行して、http://localhost:5173 を開きます（画面の開発用サーバーが、`/api` への通信をこの API に転送します）。
+
+### 開発用の最初のデータ
+
+`./mvnw spring-boot:run` で起動すると、dev（開発用）のプロファイルになり、ユーザーの表が空のときだけ、偽の API と同じデータ（ユーザー、コミュニティ、イベント、申込み、お知らせ）を入れます（`dev/DevDataLoader.java`）。開発用のアカウントは [frontend/README.md](../frontend/README.md) にあります。自動テストと、jar にまとめた本番のアプリでは入りません。
+
+最初の状態に戻したいときは、API を止めてから、データベースを消して起動し直します。
+
+```
+docker compose down -v
+./mvnw spring-boot:run
+```
+
+`-v` を付けると、データベースのデータも消えます。
+
 ## フォルダの分け方
 
 ```
 src/main/java/com/campfires/
 ├─ BackendApplication.java   アプリの入り口
+├─ dev/                      開発用の最初のデータ（dev のプロファイルのときだけ動く）
 ├─ common/                   すべての機能で使う共通の仕組み
 │   ├─ security/             ログイン、CSRF、権限（Spring Security の設定）
 │   ├─ search/               検索のルール（単語の分け方、300件の上限）

@@ -52,18 +52,18 @@ const manageItems: MenuItem[] = [
 // 本番用のファイル（npm run build）では false になるので、この項目は本番に含まれない。
 const devUserItems: MenuItem[] = import.meta.env.DEV
   ? [
-      { to: '/communities/1', label: 'コミュニティ詳細（例）' },         // S-05
-      { to: '/communities/1/events/1', label: 'イベント詳細（例）' },    // S-09
+      { to: '/communities/1', label: 'コミュニティ詳細' },         // S-05
+      { to: '/communities/1/events/1', label: 'イベント詳細' },    // S-09
     ]
   : []
 
 const devManageItems: MenuItem[] = import.meta.env.DEV
   ? [
-      { to: '/manage/communities/1/edit', label: 'コミュニティ編集（例）' },                   // S-06
-      { to: '/manage/communities/1/members', label: 'メンバー管理（例）' },                    // S-07
-      { to: '/manage/communities/1/events/new', label: 'イベント作成（例）' },                 // S-08
-      { to: '/manage/communities/1/events/1/edit', label: 'イベント編集（例）' },              // S-10
-      { to: '/manage/communities/1/events/1/applicants', label: '申込者一覧（例）' },          // S-11
+      { to: '/manage/communities/1/edit', label: 'コミュニティ編集' },                   // S-06
+      { to: '/manage/communities/1/members', label: 'メンバー管理' },                    // S-07
+      { to: '/manage/communities/1/events/new', label: 'イベント作成' },                 // S-08
+      { to: '/manage/communities/1/events/1/edit', label: 'イベント編集' },              // S-10
+      { to: '/manage/communities/1/events/1/applicants', label: '申込者一覧' },          // S-11
     ]
   : []
 
