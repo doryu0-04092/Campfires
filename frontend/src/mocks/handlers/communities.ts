@@ -16,6 +16,7 @@ import type {
 import { db, nextId } from '../db'
 import type { MockCommunity, MockJoinRequest, MockMembership, MockRole } from '../db/communities'
 import { cancelUpcomingApplications } from '../rules'
+import { searchCommunities } from '../search'
 import {
   checkCsrf,
   findLoggedInUser,
@@ -149,11 +150,28 @@ export const communityHandlers = [
    */
   http.get('/api/communities', async ({ request }) => {
     await delay(300)
-    const items = db.communities
+    // q があれば検索する。検索のルールは、イベントと同じ（src/mocks/search.ts）
+    const query = new URL(request.url).searchParams.get('q') ?? ''
+    return HttpResponse.json(searchCommunities(db, query, parsePage(request)))
+  }),
+
+  /**
+   * 自分がメンバーとして参加しているコミュニティの一覧（GET /api/me/communities）。全件返す（要件定義書 5.11）。
+   * オーナー・運営スタッフのコミュニティと、アーカイブ済みのコミュニティは含めない。
+   */
+  http.get('/api/me/communities', async ({ cookies }) => {
+    await delay(300)
+    const user = requireLogin(cookies)
+    if (user instanceof Response) {
+      return user
+    }
+    const items = db.memberships
+      .filter((m) => m.userId === user.id && m.role === 'member')
+      .map((m) => db.communities.find((c) => c.id === m.communityId)!)
       .filter((c) => c.archivedAt === null)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map(toSummary)
-    return HttpResponse.json(paginate(items, parsePage(request)))
+    return HttpResponse.json({ items })
   }),
 
   /**

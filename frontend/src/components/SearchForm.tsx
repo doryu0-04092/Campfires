@@ -2,6 +2,7 @@
  * 【役割】検索欄（入力欄と「検索」ボタン）の部品。
  * 【なぜ必要か】入力中の文字を覚えておく処理と、検索ボタンを押したときの処理を、画面から切り分けるため。
  * 入力のルール（100文字まで）は、要件定義書 5.8 に合わせている。
+ * イベントの検索とコミュニティの検索で使う（項目名と例の文字は、呼び出す画面から受け取る）。
  */
 
 // useState：部品の中で、変わる値（ここでは入力中の文字）を覚えておくための関数
@@ -17,12 +18,18 @@ type SearchFormProps = {
   initialQuery: string
   // 検索ボタンが押されたときに呼ぶ関数。入力された文字を渡す
   onSearch: (query: string) => void
+  // 入力欄の id（同じ画面に検索欄が2つあっても区別できるように）
+  id: string
+  // 読み上げソフトに伝える項目名（例：「イベントを検索」）
+  label: string
+  // 入力欄に薄く出す例の文字
+  placeholder: string
 }
 
 /**
  * 【何のため】検索欄を表示し、検索ボタンが押されたら、入力された文字を呼び出し元に渡す。
  */
-function SearchForm({ initialQuery, onSearch }: SearchFormProps) {
+function SearchForm({ initialQuery, onSearch, id, label, placeholder }: SearchFormProps) {
   // query：今入力されている文字。setQuery：それを変えるための関数
   const [query, setQuery] = useState(initialQuery)
 
@@ -41,15 +48,15 @@ function SearchForm({ initialQuery, onSearch }: SearchFormProps) {
     <form className={styles.form} role="search" onSubmit={handleSubmit}>
       {/* label と入力欄を htmlFor と id で結び付けると、読み上げソフトが入力欄の名前を読める。
           見た目では隠している（visuallyHidden） */}
-      <label htmlFor="event-search" className={styles.visuallyHidden}>
-        イベントを検索
+      <label htmlFor={id} className={styles.visuallyHidden}>
+        {label}
       </label>
       <input
-        id="event-search"
+        id={id}
         // type="search"：検索用の入力欄。ブラウザによっては、入力を消す × ボタンが付く
         type="search"
         className={styles.input}
-        placeholder="キーワードで探す（例：Java 初心者）"
+        placeholder={placeholder}
         // 入力欄には、覚えている文字（query）を表示する
         value={query}
         // 文字が入力されるたびに、覚えている文字を更新する

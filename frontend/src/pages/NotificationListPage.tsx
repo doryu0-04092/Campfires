@@ -1,23 +1,24 @@
 /**
  * 【役割】S-15「お知らせ一覧」の画面。URL は /notifications
  * 【なぜ必要か】締め切り後のキャンセルや、イベントの削除のお知らせを確認するため（F-20、要件定義書 5.10）。
- * - 新しい順に、最初に 30件を表示し、下までスクロールすると次の 30件を足して表示する
+ * - 新しい順に、最初に 30件を表示し、下までスクロールすると次の 30件を足して表示する（共通の仕組み useInfiniteList）
  * - 既読になったお知らせも、消さずに残す
  * - お知らせを開くと既読になり、イベントがあればイベントの詳細へ移動する
  * 既読にしたら、画面上部の未読の件数も取り直してもらう。
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import { fetchNotifications, markAllAsRead, markAsRead } from '../api/notifications'
 import formStyles from '../components/Form.module.css'
+import InfiniteListFooter from '../components/InfiniteListFooter'
 import styles from '../components/List.module.css'
-import LoadError from '../components/LoadError'
 import { useLayoutContext } from '../components/layoutContext'
-import type { Notification } from '../types/notification'
+import type { Notification, NotificationListResponse } from '../types/notification'
 import { displayName } from '../types/user'
 import { formatDateTime } from '../utils/formatDateTime'
+import { useInfiniteList } from '../utils/useInfiniteList'
 
 /**
  * 【何のため】お知らせの種類と材料から、画面に出す文を組み立てる。
@@ -40,75 +41,17 @@ function toMessage(notification: Notification): string {
 function NotificationListPage() {
   const navigate = useNavigate()
   const { refreshUnreadCount } = useLayoutContext()
+  const fetchPage = useCallback((page: number) => fetchNotifications(page), [])
+  const list = useInfiniteList<Notification, NotificationListResponse>('notifications', fetchPage)
 
-  // これまでに読み込んだお知らせ（ページごとに読み込んだものを、つなげて持つ）
-  const [items, setItems] = useState<Notification[]>([])
-  // 次に読み込むページ番号
-  const [nextPage, setNextPage] = useState(1)
-  // まだ読み込んでいないお知らせがあるか
-  const [hasMore, setHasMore] = useState(true)
-  // 未読の件数（全部の中で）
-  const [unreadCount, setUnreadCount] = useState(0)
-  // 読み込みの途中かどうか
-  const [isLoading, setIsLoading] = useState(false)
-  // 最初の読み込みが終わったかどうか（「お知らせはまだありません」を出すかどうかに使う）
-  const [isFirstLoaded, setIsFirstLoaded] = useState(false)
-  const [loadError, setLoadError] = useState<unknown>(undefined)
+  // この画面の中で既読にしたお知らせの番号。未読の件数を、読み込み直さずに減らすために使う
+  const [readIds, setReadIds] = useState<Set<number>>(new Set())
+  // 「すべて既読にする」を押したかどうか
+  const [allRead, setAllRead] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  // 読み込みの途中かどうかを、すぐに確かめるための入れ物。
-  // state は画面を描き直すまで新しい値にならないので、同時に2回読み込みが始まらないように、こちらで確かめる
-  const loadingRef = useRef(false)
-
-  /**
-   * 【何のため】次の 30件を読み込んで、今の一覧の後ろに足す。
-   * useCallback は、関数を作り直さずに使い回すための書き方（下の useEffect で使うため）。
-   */
-  const loadMore = useCallback(async () => {
-    if (loadingRef.current || !hasMore) {
-      return
-    }
-    loadingRef.current = true
-    setIsLoading(true)
-    setLoadError(undefined)
-    try {
-      const result = await fetchNotifications(nextPage)
-      // 前の一覧の後ろに、新しく読み込んだ分を足す
-      setItems((previous) => [...previous, ...result.items])
-      setUnreadCount(result.unreadCount)
-      setNextPage(result.page + 1)
-      setHasMore(result.page < result.totalPages)
-      setIsFirstLoaded(true)
-    } catch (error) {
-      setLoadError(error)
-    } finally {
-      loadingRef.current = false
-      setIsLoading(false)
-    }
-  }, [hasMore, nextPage])
-
-  // 一覧の一番下に置く目印。これが画面に見えたら、次の 30件を読み込む
-  const sentinelRef = useRef<HTMLDivElement>(null)
-
-  // 目印が見えたら、次の 30件を読み込む。
-  // IntersectionObserver は、ブラウザに備わっている「要素が画面に見えたかどうか」を知らせてくれる道具。
-  // 画面を開いた直後は一覧が空なので、目印がすぐに見え、最初の 30件もこの仕組みで読み込まれる。
-  // 開発中は React の確認の仕組み（StrictMode）で2回準備されるが、loadingRef があるので二重には読み込まない
-  useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel || !hasMore || loadError !== undefined) {
-      return
-    }
-    const observer = new IntersectionObserver((entries) => {
-      // entries[0].isIntersecting は「目印が画面に見えている」という意味
-      if (entries[0].isIntersecting) {
-        void loadMore()
-      }
-    })
-    observer.observe(sentinel)
-    // 画面を離れるときや、条件が変わったときに、見張りをやめる
-    return () => observer.disconnect()
-  }, [loadMore, hasMore, loadError])
+  // 未読の件数 = 最初に届いた未読の件数 - この画面で既読にした数
+  const unreadCount = allRead ? 0 : Math.max(0, (list.last?.unreadCount ?? 0) - readIds.size)
 
   /**
    * 【何のため】お知らせを開いたときの処理。既読にして、イベントがあればイベントの詳細へ移動する。
@@ -120,8 +63,9 @@ function NotificationListPage() {
     try {
       if (!notification.read) {
         await markAsRead(notification.id)
-        setItems((previous) => previous.map((n) => (n.id === notification.id ? { ...n, read: true } : n)))
-        setUnreadCount((count) => Math.max(0, count - 1))
+        list.updateItems((items) => items.map((n) => (n.id === notification.id ? { ...n, read: true } : n)))
+        // new Set([...readIds, 番号]) は「今の集まりに、番号を1つ足した新しい集まり」を作る書き方
+        setReadIds((ids) => new Set([...ids, notification.id]))
         refreshUnreadCount()
       }
       if (notification.eventId !== null) {
@@ -139,8 +83,8 @@ function NotificationListPage() {
     setActionError(null)
     try {
       await markAllAsRead()
-      setItems((previous) => previous.map((n) => ({ ...n, read: true })))
-      setUnreadCount(0)
+      list.updateItems((items) => items.map((n) => ({ ...n, read: true })))
+      setAllRead(true)
       refreshUnreadCount()
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : '通信中にエラーが発生しました。')
@@ -163,11 +107,11 @@ function NotificationListPage() {
           {actionError}
         </p>
       )}
-      {isFirstLoaded && <p className={styles.message}>未読 {unreadCount}件</p>}
-      {isFirstLoaded && items.length === 0 && <p className={styles.message}>お知らせはまだありません。</p>}
+      {list.isFirstLoaded && <p className={styles.message}>未読 {unreadCount}件</p>}
+      {list.isFirstLoaded && list.items.length === 0 && <p className={styles.message}>お知らせはまだありません。</p>}
 
       <ul className={styles.list}>
-        {items.map((notification) => (
+        {list.items.map((notification) => (
           <li key={notification.id} className={styles.card}>
             {/* 未読のお知らせは太字にし、「未読」の札を付ける */}
             <p style={{ margin: 0, fontWeight: notification.read ? 'normal' : 'bold' }}>
@@ -196,21 +140,10 @@ function NotificationListPage() {
         ))}
       </ul>
 
-      {isLoading && <p className={styles.message}>読み込み中…</p>}
-      {loadError !== undefined && <LoadError error={loadError} />}
-
-      {/* 一覧の一番下の目印。これが画面に見えたら、次の 30件を読み込む */}
-      <div ref={sentinelRef} />
-
-      {/* スクロールで読み込めないとき（読み込みに失敗したときなど）のためのボタン */}
-      {hasMore && isFirstLoaded && !isLoading && (
-        <div className={styles.actions}>
-          <button type="button" className={styles.button} onClick={() => void loadMore()}>
-            さらに読み込む
-          </button>
-        </div>
+      <InfiniteListFooter list={list} sentinelRef={list.sentinelRef} />
+      {!list.hasMore && list.items.length > 0 && (
+        <p className={styles.message}>すべてのお知らせを表示しました（{list.items.length}件）。</p>
       )}
-      {!hasMore && items.length > 0 && <p className={styles.message}>すべてのお知らせを表示しました（{items.length}件）。</p>}
     </section>
   )
 }

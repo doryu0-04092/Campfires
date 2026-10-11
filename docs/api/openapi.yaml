@@ -240,6 +240,47 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /api/me/events:
+    get:
+      operationId: listMyEvents
+      summary: 自分が申し込んだイベントの一覧を取得する（F-22、S-01）
+      description: |
+        自分が申し込んだ開催前のイベント（キャンセル待ちを含む）を、開始日時の近い順に、全件返します（要件定義書 5.8）。
+        終了したイベントと、キャンセルした申込みは含めません。件数が限られるので、ページに分けません。
+      tags: [account]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyEventListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/me/communities:
+    get:
+      operationId: listMyCommunities
+      summary: 自分がメンバーとして参加しているコミュニティの一覧を取得する（F-04、S-17）
+      description: |
+        自分が「メンバー」の立場で参加しているコミュニティを、作成日時の新しい順に、全件返します（要件定義書 5.11）。
+        オーナーや運営スタッフをしているコミュニティは含めません（GET /api/me/managed-communities で取得する）。
+        退会・除名されたコミュニティ、申請中のコミュニティ、アーカイブ済みのコミュニティも含めません。
+      tags: [account]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyCommunityListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/me/managed-communities:
     get:
       operationId: listManagedCommunities
@@ -268,13 +309,25 @@ paths:
   /api/communities:
     get:
       operationId: listCommunities
-      summary: コミュニティの一覧を取得する（F-04、S-17）
+      summary: コミュニティの一覧・検索（F-04、S-17）
       description: |
-        コミュニティを、作成日時の新しい順に返します。ログインしていなくても呼べます。
-        アーカイブ済みのコミュニティは含めません（要件定義書 5.9）。
+        すべてのコミュニティから返します。ログインしていなくても呼べます。要件定義書 5.11 のとおりに動きます。
+        - q がないとき：作成日時の新しい順
+        - q があるとき：名前と説明に単語を含むコミュニティを、当てはまった単語の数が多い順（同じなら作成日時の新しい順）
+        - 単語のルール、300件の上限は、イベントの検索（GET /api/events）と同じ
+        - アーカイブ済みのコミュニティは含めない（要件定義書 5.9）
+        画面は、page を 1, 2, 3… と増やしながら呼び、スクロールで続きを足して表示する。
       tags: [communities]
       security: []
       parameters:
+        - name: q
+          in: query
+          required: false
+          description: 検索する単語（空白で区切って複数入れられる）。なければ検索しない
+          schema:
+            type: string
+            maxLength: 100
+          example: Java 勉強会
         - $ref: '#/components/parameters/Page'
       responses:
         '200':
@@ -717,6 +770,8 @@ paths:
         - 1ページ 30件。検索しているときは 300件までで、超えたら limitExceeded を true にする
         - アーカイブ中のコミュニティのイベントも含める（要件定義書 5.9）
         - page が数でない、または 1 より小さいときは、1 として扱う
+        画面は、検索したとき・ログインしていないときにこの API を使い、page を 1, 2, 3… と増やしながら呼んで、
+        スクロールで続きを足して表示する。ログインしていて検索していないときは、GET /api/me/events を使う。
       tags: [events]
       security: []
       parameters:
@@ -1453,16 +1508,30 @@ components:
           example: '2026-09-20T03:00:00Z'
 
     CommunityListResponse:
-      description: コミュニティの一覧の返事
+      description: コミュニティの一覧・検索の返事
       allOf:
         - $ref: '#/components/schemas/PageInfo'
         - type: object
-          required: [items]
+          required: [items, limitExceeded]
           properties:
             items:
               type: array
               items:
                 $ref: '#/components/schemas/CommunitySummary'
+            limitExceeded:
+              type: boolean
+              description: 検索結果が 300件を超えたかどうか（超えたら true。totalCount は 300 になる）
+              example: false
+
+    MyCommunityListResponse:
+      type: object
+      description: 自分がメンバーとして参加しているコミュニティの一覧の返事（全件。ページに分けない）
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommunitySummary'
 
     CommunityDetail:
       description: コミュニティの詳細。一覧の情報に、オーナーと、自分との関係を足したもの
@@ -1679,6 +1748,26 @@ components:
               type: boolean
               description: 検索結果が 300件を超えたかどうか（超えたら true。totalCount は 300 になる）
               example: false
+
+    MyEvent:
+      description: 自分が申し込んだイベント1件分。一覧の情報に、自分の申込みの状況を足したもの
+      allOf:
+        - $ref: '#/components/schemas/EventSummary'
+        - type: object
+          required: [myApplication]
+          properties:
+            myApplication:
+              $ref: '#/components/schemas/MyApplication'
+
+    MyEventListResponse:
+      type: object
+      description: 自分が申し込んだイベントの一覧の返事（全件。ページに分けない）
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyEvent'
 
     CommunityEventListResponse:
       description: コミュニティのイベントの一覧の返事

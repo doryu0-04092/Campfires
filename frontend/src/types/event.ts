@@ -95,6 +95,20 @@ export type ApplicationListResponse = PageInfo & {
 }
 
 /**
+ * 【何のため】自分が申し込んだイベント1件分。一覧の情報に、自分の申込みの状況を足したもの。
+ */
+export type MyEvent = EventSummary & {
+  myApplication: MyApplication
+}
+
+/**
+ * 【何のため】自分が申し込んだイベントの一覧の返事（GET /api/me/events。全件。ページに分けない）。
+ */
+export type MyEventListResponse = {
+  items: MyEvent[]
+}
+
+/**
  * 【何のため】コミュニティのイベントの一覧の返事（GET /api/communities/:communityId/events）。
  */
 export type CommunityEventListResponse = PageInfo & {
