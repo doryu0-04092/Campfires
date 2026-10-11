@@ -7,7 +7,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import * as authApi from '../api/auth'
-import type { LoginRequest } from '../types/account'
+import type { DeleteMeRequest, LoginRequest, SignupRequest, UpdateMeRequest } from '../types/account'
 import { AuthContext, type AuthState } from './authContext'
 
 /**
@@ -71,9 +71,37 @@ function AuthProvider({ children }: AuthProviderProps) {
     setState({ status: 'guest' })
   }
 
+  /**
+   * 【何のため】アカウントを登録する。成功したら、ログインした状態にする（登録の API がログインもしてくれる）。
+   */
+  async function signup(request: SignupRequest) {
+    const me = await authApi.signup(request)
+    await authApi.fetchCsrfToken()
+    setState({ status: 'authenticated', me })
+  }
+
+  /**
+   * 【何のため】ニックネームを変更する。成功したら、覚えている自分の情報も新しくする（画面上部の表示が変わる）。
+   */
+  async function updateMe(request: UpdateMeRequest) {
+    const me = await authApi.updateMe(request)
+    setState({ status: 'authenticated', me })
+  }
+
+  /**
+   * 【何のため】アカウントを削除する。成功したら、ログインしていない状態にする。
+   */
+  async function deleteAccount(request: DeleteMeRequest) {
+    await authApi.deleteMe(request)
+    await authApi.fetchCsrfToken()
+    setState({ status: 'guest' })
+  }
+
   return (
     // AuthContext.Provider で包むと、中のすべての部品が、value に入れた値を読めるようになる
-    <AuthContext.Provider value={{ state, login, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ state, login, logout, signup, updateMe, deleteAccount }}>
+      {children}
+    </AuthContext.Provider>
   )
 }
 

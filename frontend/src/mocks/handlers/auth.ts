@@ -1,23 +1,15 @@
 /**
- * 【役割】ログインとアカウントの偽の API（docs/api/openapi.yaml の auth と account）。
- * 【なぜ必要か】バックエンドができるまでの間、ログイン・ログアウトの画面の動きを確かめるため。
- * 今は、CSRF トークン、ログイン、ログアウト、自分の情報の取得だけを作っている。
- * 登録、ニックネームの変更、アカウント削除は、アカウントの画面を作るときに足す。
+ * 【役割】アカウント登録、ログイン、ログアウトの偽の API（docs/api/openapi.yaml の auth）。
+ * 【なぜ必要か】バックエンドができるまでの間、登録・ログイン・ログアウトの画面の動きを確かめるため。
+ * 自分のアカウントの API（/api/me）は account.ts に分けている。
  */
 
 import { delay, http, HttpResponse } from 'msw'
 import type { FieldError } from '../../types/api'
-import type { LoginRequest } from '../../types/account'
+import type { LoginRequest, SignupRequest } from '../../types/account'
 import { db } from '../db'
-import {
-  checkCsrf,
-  clearSessionCookie,
-  CSRF_COOKIE,
-  findLoggedInUser,
-  problem,
-  sessionCookie,
-  toMe,
-} from './common'
+import { checkCsrf, clearSessionCookie, CSRF_COOKIE, problem, sessionCookie, toMe } from './common'
+import { Validator } from './validation'
 
 // ログインの試行制限：5回続けて失敗したら、15分間ロックする（非機能要件 3章）
 const MAX_LOGIN_FAILURES = 5
@@ -35,6 +27,59 @@ export const authHandlers = [
     return new HttpResponse(null, {
       status: 204,
       headers: { 'Set-Cookie': `${CSRF_COOKIE}=${token}; Path=/; SameSite=Lax` },
+    })
+  }),
+
+  /**
+   * アカウントを登録する（POST /api/auth/signup）。登録に成功したら、そのままログインした状態にする。
+   */
+  http.post('/api/auth/signup', async ({ request, cookies }) => {
+    await delay(300)
+    const csrfError = checkCsrf(request, cookies)
+    if (csrfError) {
+      return csrfError
+    }
+
+    const body = (await request.json()) as Partial<SignupRequest>
+
+    // 入力のチェック（docs/api/openapi.yaml の SignupRequest のルール）
+    const validator = new Validator()
+    const realName = validator.text('realName', body.realName, '本名', 1, 50)
+    const nickname = validator.text('nickname', body.nickname, 'ニックネーム', 1, 30)
+    const email = validator.email('email', body.email)
+    const password = validator.password('password', body.password)
+    if (body.agreedToPolicies !== true) {
+      validator.errors.push({ field: 'agreedToPolicies', message: 'プライバシーポリシーと利用規約に同意してください。' })
+    }
+    if (validator.hasErrors()) {
+      return problem(400, 'VALIDATION_ERROR', '入力内容に誤りがあります。', { errors: validator.errors })
+    }
+
+    // すでに使われているメールアドレスなら 409（大文字と小文字は区別しない）
+    const exists = db.users.some((u) => u.deletedAt === null && u.email.toLowerCase() === email.toLowerCase())
+    if (exists) {
+      return problem(409, 'EMAIL_ALREADY_REGISTERED', 'このメールアドレスは、すでに登録されています。')
+    }
+
+    // 新しいユーザーを作る。番号は、今いちばん大きい番号の次にする
+    const now = new Date().toISOString()
+    const user = {
+      id: Math.max(...db.users.map((u) => u.id)) + 1,
+      realName,
+      nickname,
+      email,
+      password,
+      // 同意した日時を記録する（本物では、同意した規約のバージョンも記録する）
+      policiesAgreedAt: now,
+      deletedAt: null,
+      createdAt: now,
+    }
+    db.users.push(user)
+
+    // 登録に成功したら、そのままログインした状態にする
+    return HttpResponse.json(toMe(user), {
+      status: 201,
+      headers: { 'Set-Cookie': sessionCookie(user.id) },
     })
   }),
 
@@ -80,7 +125,8 @@ export const authHandlers = [
       })
     }
 
-    const user = db.users.find((u) => u.email.toLowerCase() === key)
+    // アカウントを削除したユーザーは、メールアドレスが空になっているので見つからない
+    const user = db.users.find((u) => u.deletedAt === null && u.email.toLowerCase() === key)
 
     // メールアドレスかパスワードが違うとき。どちらが違うかは教えない（docs/api/openapi.yaml の login）
     if (!user || user.password !== password) {
@@ -116,15 +162,4 @@ export const authHandlers = [
     })
   }),
 
-  /**
-   * 自分の情報を取得する（GET /api/me）。ログインしていなければ 401。
-   */
-  http.get('/api/me', async ({ cookies }) => {
-    await delay(200)
-    const user = findLoggedInUser(cookies)
-    if (!user) {
-      return problem(401, 'UNAUTHENTICATED', 'ログインしてください。')
-    }
-    return HttpResponse.json(toMe(user))
-  }),
 ]

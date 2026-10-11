@@ -79,7 +79,8 @@ export function findLoggedInUser(cookies: Record<string, string>): MockUser | nu
     return null
   }
   const userId = Number(value.slice('user-'.length))
-  return db.users.find((user) => user.id === userId) ?? null
+  // アカウントを削除したユーザーは、ログインしていないものとして扱う
+  return db.users.find((user) => user.id === userId && user.deletedAt === null) ?? null
 }
 
 /**

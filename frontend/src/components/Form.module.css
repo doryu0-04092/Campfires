@@ -1,0 +1,150 @@
+/*
+ * 【役割】入力の画面（登録、ログイン、作成・編集など）で共通に使う見た目。
+ * 【なぜ必要か】入力欄、エラーの文、ボタンの見た目を、すべての入力の画面でそろえるため。
+ * FormField.tsx と、各画面のファイルから読み込んで使う。
+ */
+
+/* 入力の画面全体：入力欄が横に広がりすぎないように、幅を決める */
+.container {
+  max-width: 480px;
+}
+
+/* 入力欄を縦に並べる */
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+/* 入力欄1つ分：項目名、入力欄、補足、エラーの文を縦に並べる */
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+/* 項目名 */
+.label {
+  font-weight: bold;
+}
+
+/* 入力欄と複数行の入力欄 */
+.input {
+  padding: 8px 12px;
+  border: 1px solid #d6cbc1;
+  border-radius: 6px;
+  font: inherit;
+}
+
+/* エラーがある入力欄：枠を赤くする */
+.input[aria-invalid='true'] {
+  border-color: #c92a2a;
+}
+
+/* 入力欄の下の補足の文 */
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* 入力欄ごとのエラーの文 */
+.fieldError {
+  margin: 0;
+  color: #c92a2a;
+  font-size: 14px;
+}
+
+/* 画面の上に出すエラーの文 */
+.formError {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #fff5f5;
+  color: #c92a2a;
+}
+
+/* 成功したときの知らせ */
+.success {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #ebfbee;
+  color: #2b8a3e;
+}
+
+/* 送信のボタン（強調色） */
+.submit {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 危ない操作のボタン（削除など）：赤くする */
+.danger {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #c92a2a;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 控えめなボタン（キャンセルなど） */
+.secondary {
+  padding: 10px 16px;
+  border: 1px solid #d6cbc1;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 押せないボタン：薄くする */
+.submit:disabled,
+.danger:disabled,
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ボタンを横に並べる */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* チェックボックスと文を横に並べる */
+.checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* 補足の文 */
+.note {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* 画面の中の区切り（まとまりごとに枠で囲む） */
+.section {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid #e8dfd6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.section h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+
+/* 危ない操作のまとまり：赤い枠で囲む */
+.dangerSection {
+  border-color: #ffc9c9;
+}

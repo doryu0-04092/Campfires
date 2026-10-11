@@ -1,0 +1,28 @@
+/*
+ * 【役割】アカウント設定の画面（AccountSettingsPage.tsx）だけで使う見た目。
+ * 入力欄やボタン、まとまりの枠は、共通の Form.module.css を使っている。
+ */
+
+/* 登録している情報：項目名と値を横に並べる（2列の表のような形） */
+.profile {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.profile dt {
+  color: var(--text-muted);
+}
+
+.profile dd {
+  margin: 0;
+  /* 長いメールアドレスでも、画面からはみ出さないように折り返す */
+  overflow-wrap: anywhere;
+}
+
+/* 削除の説明の一覧 */
+.deleteNotes {
+  padding-left: 20px;
+  font-size: 14px;
+}

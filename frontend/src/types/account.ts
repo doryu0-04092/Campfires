@@ -27,3 +27,33 @@ export type LoginRequest = {
   email: string
   password: string
 }
+
+/**
+ * 【何のため】アカウント登録のときに送るデータ（POST /api/auth/signup）の形。
+ */
+export type SignupRequest = {
+  // 本名（1〜50文字）。ほかのユーザーには表示されない
+  realName: string
+  // ニックネーム（1〜30文字）
+  nickname: string
+  // メールアドレス
+  email: string
+  // パスワード（8〜64文字、半角の英字・数字・記号）
+  password: string
+  // プライバシーポリシーと利用規約に同意したか（true でなければ登録できない）
+  agreedToPolicies: boolean
+}
+
+/**
+ * 【何のため】ニックネームを変えるときに送るデータ（PATCH /api/me）の形。
+ */
+export type UpdateMeRequest = {
+  nickname: string
+}
+
+/**
+ * 【何のため】アカウントを削除するときに送るデータ（DELETE /api/me）の形。本人の確認のため、パスワードを送る。
+ */
+export type DeleteMeRequest = {
+  password: string
+}
