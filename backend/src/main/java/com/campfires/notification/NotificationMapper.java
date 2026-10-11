@@ -20,4 +20,12 @@ public interface NotificationMapper {
      */
     void insertLateCancellation(@Param("eventId") long eventId, @Param("actorUserId") long actorUserId,
             @Param("operatorUserId") long operatorUserId);
+
+    /**
+     * 【何のため】イベントの削除を、申し込んでいた人（キャンセル待ちを含む）に知らせる（要件定義書 5.10）。
+     * イベントを削除する前に呼ぶ（削除した後は、申込みも消えていて、誰に送るか分からないため）。
+     * @param eventId        削除するイベント
+     * @param operatorUserId 削除の操作をした人。この人にはお知らせを送らない
+     */
+    void insertEventDeleted(@Param("eventId") long eventId, @Param("operatorUserId") long operatorUserId);
 }

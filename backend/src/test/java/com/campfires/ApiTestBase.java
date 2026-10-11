@@ -85,6 +85,60 @@ public abstract class ApiTestBase {
         return withJson(builder, body).session(account.session());
     }
 
+    // ---------- テストのデータを SQL で直接作る（API を通すより速く、終了したイベントなども作れる） ----------
+
+    /**
+     * 【何のため】コミュニティを作り、オーナーをメンバーに入れて、番号を返す。
+     */
+    protected long insertCommunity(long ownerId, boolean archived) {
+        long id = jdbcTemplate.queryForObject(
+                "INSERT INTO communities (name, owner_id, archived_at) VALUES ('テストのコミュニティ', ?, "
+                        + (archived ? "now()" : "NULL") + ") RETURNING id",
+                Long.class, ownerId);
+        insertMember(id, ownerId, "owner");
+        return id;
+    }
+
+    /**
+     * 【何のため】メンバーを入れる。role は owner、staff、member のどれか。
+     */
+    protected void insertMember(long communityId, long userId, String role) {
+        jdbcTemplate.update("INSERT INTO memberships (community_id, user_id, role) VALUES (?, ?, ?)",
+                communityId, userId, role);
+    }
+
+    /**
+     * 【何のため】イベントを作って、番号を返す。日時は「今から何時間後か」で指定する（マイナスなら過去）。
+     */
+    protected long insertEvent(long communityId, String title, int capacity, int deadlineHours, int startHours,
+            int endHours) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO events (community_id, title, start_at, end_at, application_deadline, location, capacity)
+                VALUES (?, ?, now() + make_interval(hours => ?), now() + make_interval(hours => ?),
+                        now() + make_interval(hours => ?), 'オンライン', ?)
+                RETURNING id
+                """, Long.class, communityId, title, startHours, endHours, deadlineHours, capacity);
+    }
+
+    /**
+     * 【何のため】申込みを作る。minutesAgo は、何分前に申し込んだことにするか（大きいほど先に申し込んだ）。
+     */
+    protected void insertApplication(long eventId, long userId, String status, int minutesAgo) {
+        jdbcTemplate.update("""
+                INSERT INTO applications (event_id, user_id, status, applied_at)
+                VALUES (?, ?, ?, now() - make_interval(mins => ?))
+                """, eventId, userId, status, minutesAgo);
+    }
+
+    /**
+     * 【何のため】申込みの状態を返す。申込みがなければ null。
+     */
+    protected String applicationStatus(long eventId, long userId) {
+        var rows = jdbcTemplate.queryForList(
+                "SELECT status FROM applications WHERE event_id = ? AND user_id = ?", String.class, eventId, userId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
     /**
      * 【何のため】毎回ちがう、検索のテストに使う単語を作る（ほかのテストのデータと混ざらないように）。
      */
