@@ -1,37 +1,190 @@
 /**
  * 【役割】S-05「コミュニティ詳細」の画面。URL は /communities/:communityId
- * 【なぜ必要か】docs/screens.md で決めた画面の1つ。
- * 今は仮の表示だけを置いている。中身は、画面を1つずつ作るときに書く。
+ * 【なぜ必要か】コミュニティの情報を見て、参加の申請（F-06）や退会（F-08）をするため。
+ * 見ている人の立場（API が返す myRole、myJoinRequestStatus）によって、出すボタンを変える。
+ * ただし、ボタンを出し分けるのは使いやすさのためで、本当の権限のチェックはバックエンド（偽の API）が行う。
+ * イベントの一覧は、イベントの画面を作るとき（Issue #23）に追加する。
  */
 
-// useParams：URL の中の「:communityId」のような部分に入った値を取り出すための関数
-import { useParams } from 'react-router'
-// まだ中身を作っていない画面に、仮の表示を出すための部品
-import PlaceholderPage from '../components/PlaceholderPage'
+import { useState } from 'react'
+import { Link, useLocation, useParams } from 'react-router'
+import { ApiError } from '../api/client'
+import { fetchCommunity, leaveCommunity, requestToJoin } from '../api/communities'
+import { useAuth } from '../auth/useAuth'
+import formStyles from '../components/Form.module.css'
+import styles from '../components/List.module.css'
+import LoadError from '../components/LoadError'
+import { ROLE_LABELS, type CommunityDetail } from '../types/community'
+import { displayName } from '../types/user'
+import { formatDateTime } from '../utils/formatDateTime'
+import { useLoader } from '../utils/useLoader'
 
 /**
  * 【何のため】コミュニティ詳細の画面を表示する。
  */
 function CommunityDetailPage() {
-  // URL から communityId を取り出す。
-  // 例：/communities/3 なら、communityId は "3"
-  const { communityId } = useParams()
+  // URL からコミュニティの番号を取り出す
+  const communityId = Number(useParams().communityId)
+  const { state } = useAuth()
+  // ログイン状態が変わったら（ログイン・ログアウト）、自分との関係が変わるので読み込み直す
+  const { isLoading, data, error, reload } = useLoader(`community:${communityId}:${state.status}`, (signal) =>
+    fetchCommunity(communityId, signal),
+  )
+
+  if (isLoading) {
+    return <p className={styles.message}>読み込み中…</p>
+  }
+  if (error !== undefined || !data) {
+    return <LoadError error={error} />
+  }
 
   return (
-    <PlaceholderPage
-      screenId="S-05"
-      title="コミュニティ詳細"
-      // `` で囲んだ文字の中の ${ } には、変数の値が入る
-      description={`コミュニティの情報とイベントの一覧を表示する。参加の申請や退会もここで行う。（表示中：コミュニティ ${communityId}）`}
-      // 動作確認のため、この画面から移動できる画面へのリンクを置く。
-      // 管理の画面へのリンクは、本来はオーナーと運営スタッフにだけ表示する
-      links={[
-        { to: `/manage/communities/${communityId}/edit`, label: 'コミュニティ編集（管理）' },
-        { to: `/manage/communities/${communityId}/members`, label: 'メンバー管理（管理）' },
-        { to: `/manage/communities/${communityId}/events/new`, label: 'イベント作成（管理）' },
-        { to: `/communities/${communityId}/events/1`, label: 'イベント詳細（例：1番）' },
-      ]}
-    />
+    <section>
+      <h1>
+        {data.name}
+        {data.archivedAt && <span className={`${styles.badge} ${styles.badgeMuted}`}>アーカイブ済み</span>}
+      </h1>
+
+      {/* アーカイブ済みのときの知らせ（要件定義書 5.9） */}
+      {data.archivedAt && (
+        <p className={styles.banner}>
+          このコミュニティはアーカイブされています（{formatDateTime(data.archivedAt)}）。新しい参加の申請はできません。
+        </p>
+      )}
+
+      {/* white-space: pre-wrap で、説明の中の改行をそのまま表示する */}
+      {data.description && <p style={{ whiteSpace: 'pre-wrap' }}>{data.description}</p>}
+
+      <dl className={styles.cardMeta}>
+        <div>オーナー：{displayName(data.owner)}</div>
+        <div>メンバー：{data.memberCount}人</div>
+        {data.myRole && <div>あなたの立場：{ROLE_LABELS[data.myRole]}</div>}
+      </dl>
+
+      {/* key に状態を渡すと、状態が変わったときに中のメッセージが消える */}
+      <MembershipActions key={`${data.myRole}:${data.myJoinRequestStatus}`} community={data} onChanged={reload} />
+      <ManageLinks community={data} />
+
+      <h2>イベント</h2>
+      <p className={styles.message}>このコミュニティのイベントの一覧は、イベントの画面を作るときに追加します。</p>
+    </section>
+  )
+}
+
+/**
+ * 【何のため】参加の申請と退会のボタンを表示する。見ている人の立場によって、出すものを変える。
+ */
+function MembershipActions({ community, onChanged }: { community: CommunityDetail; onChanged: () => void }) {
+  const { state } = useAuth()
+  const location = useLocation()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  /**
+   * 【何のため】API を呼び、成功したら読み込み直す。失敗したら、サーバーの文を出す。
+   */
+  async function run(action: () => Promise<unknown>) {
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await action()
+      onChanged()
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '通信中にエラーが発生しました。時間をおいて、もう一度お試しください。')
+      setIsSubmitting(false)
+    }
+  }
+
+  /**
+   * 【何のため】退会のボタンが押されたときの処理。間違って押さないように、確認してから退会する（要件定義書 5.4）。
+   */
+  function handleLeave() {
+    // window.confirm は、ブラウザの確認の窓を出す。「OK」なら true、「キャンセル」なら false
+    const ok = window.confirm(
+      `「${community.name}」を退会しますか？\n退会すると、このコミュニティの開催前のイベントへの申込み（キャンセル待ちを含む）は、すべてキャンセルされます。`,
+    )
+    if (ok) {
+      void run(() => leaveCommunity(community.id))
+    }
+  }
+
+  // ログインしていない：ログインを案内する。ログインしたら、この画面に戻ってくる
+  if (state.status !== 'authenticated') {
+    return (
+      <p className={styles.message}>
+        参加を申請するには、<Link to="/login" state={{ from: location }}>ログイン</Link>してください。
+      </p>
+    )
+  }
+
+  let content
+  if (community.myRole === 'owner') {
+    // オーナーは退会できない（要件定義書 5.1）
+    content = <p className={styles.message}>あなたはこのコミュニティのオーナーです。</p>
+  } else if (community.myRole !== null) {
+    // メンバーと運営スタッフ：退会できる
+    content = (
+      <button type="button" className={`${styles.button} ${styles.buttonDanger}`} onClick={handleLeave} disabled={isSubmitting}>
+        このコミュニティを退会する
+      </button>
+    )
+  } else if (community.archivedAt) {
+    // アーカイブ中は、参加を申請できない
+    content = null
+  } else if (community.myJoinRequestStatus === 'pending') {
+    content = <p className={styles.message}>参加を申請しています。オーナーか運営スタッフの承認を待っています。</p>
+  } else {
+    // まだ申請していない、または却下された：申請できる（却下された人も、もう一度申請できる。要件定義書 5.1）
+    content = (
+      <>
+        {community.myJoinRequestStatus === 'rejected' && (
+          <p className={styles.message}>前回の参加の申請は、承認されませんでした。もう一度申請できます。</p>
+        )}
+        <button
+          type="button"
+          className={`${styles.button} ${styles.buttonPrimary}`}
+          onClick={() => void run(() => requestToJoin(community.id))}
+          disabled={isSubmitting}
+        >
+          参加を申請する
+        </button>
+      </>
+    )
+  }
+
+  return (
+    <div className={styles.actions}>
+      {content}
+      {error && (
+        <p className={formStyles.formError} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * 【何のため】オーナーと運営スタッフに、このコミュニティの管理の画面へのリンクを表示する。
+ */
+function ManageLinks({ community }: { community: CommunityDetail }) {
+  if (community.myRole !== 'owner' && community.myRole !== 'staff') {
+    return null
+  }
+  const base = `/manage/communities/${community.id}`
+  return (
+    <div className={styles.actions}>
+      <span className={styles.cardMeta}>管理：</span>
+      {/* 編集（アーカイブを含む）はオーナーだけ */}
+      {community.myRole === 'owner' && (
+        <Link to={`${base}/edit`} className={styles.button}>コミュニティを編集</Link>
+      )}
+      <Link to={`${base}/members`} className={styles.button}>メンバー管理</Link>
+      {/* アーカイブ中は、新しいイベントを作れない（要件定義書 5.9） */}
+      {!community.archivedAt && (
+        <Link to={`${base}/events/new`} className={styles.button}>イベントを作る</Link>
+      )}
+    </div>
   )
 }
 

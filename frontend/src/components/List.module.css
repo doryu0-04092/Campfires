@@ -1,0 +1,135 @@
+/*
+ * 【役割】一覧や詳細の画面で共通に使う見た目（カードの一覧、小さな札、操作のボタン）。
+ * 【なぜ必要か】コミュニティ、メンバー、イベントなど、一覧の画面の見た目をそろえるため。
+ */
+
+/* 画面の見出しと、右側のボタンを横に並べる */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.header h1 {
+  margin: 0;
+}
+
+/* 案内の文（件数など） */
+.message {
+  margin: 16px 0;
+  color: var(--text-muted);
+}
+
+/* カードの一覧：先頭の「・」を消し、カードどうしの間を空ける */
+.list {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* カード1枚 */
+.card {
+  padding: 12px 16px;
+  border: 1px solid #e8dfd6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* カードの見出し */
+.cardTitle {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* カードの補足（説明、人数など） */
+.cardMeta {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* 長い説明：3行を超えたら「…」で省略する */
+.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* カードの中の操作（リンクやボタン）を横に並べる */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* 小さな札（立場、状態など） */
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #f1ece7;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: normal;
+  vertical-align: middle;
+}
+
+/* 目立たせる札（承認待ちの件数など） */
+.badgeAccent {
+  background: #fbe3d6;
+  color: var(--accent);
+}
+
+/* 注意の札（アーカイブ済みなど） */
+.badgeMuted {
+  background: #e9ecef;
+  color: #495057;
+}
+
+/* ボタン型のリンク・ボタン（小さめ） */
+.button {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid #d6cbc1;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* 強調のボタン */
+.buttonPrimary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+/* 危ない操作のボタン */
+.buttonDanger {
+  border-color: #c92a2a;
+  color: #c92a2a;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* お知らせの帯（アーカイブ済みなど） */
+.banner {
+  margin: 16px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #e9ecef;
+}
