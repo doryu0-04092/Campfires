@@ -13,8 +13,9 @@ export type MockNotification = {
   id: number
   // お知らせを受け取るユーザーの番号
   userId: number
-  // late_cancellation：締め切り後のキャンセル、event_deleted：イベントの削除
-  type: 'late_cancellation' | 'event_deleted'
+  // late_cancellation：締め切り後のキャンセル、event_deleted：イベントの削除、
+  // application_approved：参加の承認、application_rejected：参加の却下（要件定義書 5.12）
+  type: 'late_cancellation' | 'event_deleted' | 'application_approved' | 'application_rejected'
   // 出来事が起きた時点のイベントのタイトル（イベントが削除されても残す）
   eventTitle: string
   communityId: number

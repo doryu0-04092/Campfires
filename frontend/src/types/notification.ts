@@ -10,8 +10,10 @@ import type { UserRef } from './user'
  * 【何のため】お知らせの種類（要件定義書 5.10）。
  * - late_cancellation：締め切り後に、申込みがキャンセルされた（オーナーと運営スタッフあて）
  * - event_deleted：申し込んでいたイベントが削除された（申し込んでいた人あて）
+ * - application_approved：参加が承認された（申し込んだ人あて。要件定義書 5.12）
+ * - application_rejected：参加が却下された（申し込んだ人あて）
  */
-export type NotificationType = 'late_cancellation' | 'event_deleted'
+export type NotificationType = 'late_cancellation' | 'event_deleted' | 'application_approved' | 'application_rejected'
 
 /**
  * 【何のため】お知らせ1件分の情報。

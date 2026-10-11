@@ -32,6 +32,10 @@ function toMessage(notification: Notification): string {
     }
     case 'event_deleted':
       return `申し込んでいた「${notification.eventTitle}」は、削除されました。`
+    case 'application_approved':
+      return `「${notification.eventTitle}」への参加が承認されました。`
+    case 'application_rejected':
+      return `「${notification.eventTitle}」への参加は、承認されませんでした。`
   }
 }
 

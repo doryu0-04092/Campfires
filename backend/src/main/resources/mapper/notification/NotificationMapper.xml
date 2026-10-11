@@ -23,7 +23,8 @@
     </insert>
 
     <!--
-      申し込んでいた人の人数分、お知らせを作る。イベントは削除されるので、event_id は入れない（NULL）
+      申し込んでいた人（承認待ち、キャンセル待ちを含む。却下された人は除く）の人数分、お知らせを作る。
+      イベントは削除されるので、event_id は入れない（NULL）
     -->
     <insert id="insertEventDeleted">
         INSERT INTO notifications (user_id, type, event_title, community_id, event_id, actor_user_id)
@@ -31,7 +32,16 @@
         FROM events e
         JOIN applications a ON a.event_id = e.id
         WHERE e.id = #{eventId}
+          AND a.status &lt;&gt; 'rejected'
           AND a.user_id &lt;&gt; #{operatorUserId}
+    </insert>
+
+    <!-- 承認・却下のお知らせ。承認・却下した人の名前は出さないので、actor_user_id は入れない -->
+    <insert id="insertApplicationDecided">
+        INSERT INTO notifications (user_id, type, event_title, community_id, event_id, actor_user_id)
+        SELECT #{userId}, #{type}, e.title, e.community_id, e.id, NULL
+        FROM events e
+        WHERE e.id = #{eventId}
     </insert>
 
     <!--

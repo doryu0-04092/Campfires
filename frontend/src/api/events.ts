@@ -6,6 +6,7 @@
  */
 
 import type {
+  Application,
   ApplicationListResponse,
   CommunityEventListResponse,
   EventDetail,
@@ -97,6 +98,17 @@ export function cancelMyApplication(communityId: number, eventId: number) {
 export function fetchApplications(communityId: number, eventId: number, page: number, signal?: AbortSignal) {
   const query = page > 1 ? `?page=${page}` : ''
   return apiRequest<ApplicationListResponse>(`${eventPath(communityId, eventId)}/applications${query}`, { signal })
+}
+
+/**
+ * 【何のため】承認待ちの申込みを、承認・却下する（PATCH /api/communities/:communityId/events/:eventId/applications/:userId）。
+ * オーナーと運営スタッフだけが使える（要件定義書 5.12）。
+ */
+export function decideApplication(communityId: number, eventId: number, userId: number, status: 'approved' | 'rejected') {
+  return apiRequest<Application>(`${eventPath(communityId, eventId)}/applications/${userId}`, {
+    method: 'PATCH',
+    body: { status },
+  })
 }
 
 /** 【何のため】自分が申し込んだ開催前のイベントの一覧を取得する（GET /api/me/events）。 */

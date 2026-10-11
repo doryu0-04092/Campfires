@@ -7,7 +7,7 @@ import java.time.Instant;
  * 【なぜ必要か】イベントの詳細や、自分が申し込んだイベントの一覧で、
  * 「申込み済みか、キャンセル待ちの何番目か」を画面に伝えるため。
  *
- * @param status           applied（申込み済み）か waitlisted（キャンセル待ち）
+ * @param status           pending（承認待ち）、applied（申込み済み）、waitlisted（キャンセル待ち）、rejected（却下）のどれか
  * @param waitlistPosition キャンセル待ちの何番目か（1から始まる）。申込み済みなら null
  * @param appliedAt        申し込んだ日時
  */

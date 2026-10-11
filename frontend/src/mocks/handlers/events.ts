@@ -1,7 +1,7 @@
 /**
  * 【役割】イベントと申込みの偽の API（docs/api/openapi.yaml の events と applications）。
  * 【なぜ必要か】バックエンドができるまでの間、イベントの画面の動きを確かめるため。
- * 申込み、キャンセル、繰り上げ、お知らせのルールは、要件定義書 5.2、5.3、5.10 のとおり（src/mocks/rules.ts）。
+ * 申込み、キャンセル、繰り上げ、承認・却下、お知らせのルールは、要件定義書 5.2、5.3、5.10、5.12 のとおり（src/mocks/rules.ts）。
  */
 
 import { delay, http, HttpResponse } from 'msw'
@@ -10,12 +10,20 @@ import { db, nextId } from '../db'
 import type { MockCommunity } from '../db/communities'
 import type { MockApplication, MockEvent } from '../db/events'
 import {
+  appliedOf,
+  approveAllPending,
+  approveApplication,
   cancelApplication,
   countApplied,
+  countPending,
   deleteEvent,
   isDeadlinePassed,
   isEnded,
+  isMemberOf,
+  isStarted,
+  pendingOf,
   promoteWaitlist,
+  rejectApplication,
   waitlistOf,
 } from '../rules'
 import { searchEvents, toEventSummary } from '../search'
@@ -60,6 +68,9 @@ function toDetail(community: MockCommunity, event: MockEvent, userId: number | u
     location: event.location,
     applicationDeadline: event.applicationDeadline,
     waitlistCount: waitlistOf(event.id).length,
+    pendingCount: countPending(event.id),
+    memberApproval: event.memberApproval,
+    nonMemberApproval: event.nonMemberApproval,
     communityArchivedAt: community.archivedAt,
     myRole: findRole(community.id, userId),
     myApplication: mine ? toMyApplication(mine) : null,
@@ -82,8 +93,10 @@ function parseDate(value: unknown): Date | null {
 /**
  * 【何のため】イベントの作成・編集で送られてきたデータをチェックする（docs/api/openapi.yaml の EventInput）。
  * 日時の前後関係：今 < 開始日時、申込み締め切り日時 < 開始日時 < 終了日時
+ * 承認の方法が送られてこなければ、作成では最初の値（メンバーは自動、メンバー以外は受け付けない）、編集では今の値にする。
+ * @param current 編集のときは今のイベント。作成のときは undefined
  */
-function validateEventInput(body: Partial<EventInput>): EventInput | Response {
+function validateEventInput(body: Partial<EventInput>, current?: MockEvent): EventInput | Response {
   const validator = new Validator()
   const title = validator.text('title', body.title, 'タイトル', 1, 100)
   const description = validator.text('description', body.description, '説明', 0, 5000)
@@ -113,6 +126,19 @@ function validateEventInput(body: Partial<EventInput>): EventInput | Response {
     validator.errors.push({ field: 'applicationDeadline', message: '申込み締め切り日時は、開始日時より前にしてください。' })
   }
 
+  // 承認の方法（送られてこなければ、作成では最初の値、編集では今の値）
+  const memberApproval = body.memberApproval ?? current?.memberApproval ?? 'auto'
+  const nonMemberApproval = body.nonMemberApproval ?? current?.nonMemberApproval ?? 'closed'
+  if (memberApproval !== 'auto' && memberApproval !== 'manual') {
+    validator.errors.push({ field: 'memberApproval', message: 'メンバーの承認の方法は、自動か手動を選んでください。' })
+  }
+  if (nonMemberApproval !== 'auto' && nonMemberApproval !== 'manual' && nonMemberApproval !== 'closed') {
+    validator.errors.push({
+      field: 'nonMemberApproval',
+      message: 'メンバー以外の承認の方法は、自動・手動・受け付けないのどれかを選んでください。',
+    })
+  }
+
   if (validator.hasErrors()) {
     return problem(400, 'VALIDATION_ERROR', '入力内容に誤りがあります。', { errors: validator.errors })
   }
@@ -124,6 +150,8 @@ function validateEventInput(body: Partial<EventInput>): EventInput | Response {
     startAt: startAt!.toISOString(),
     endAt: endAt!.toISOString(),
     applicationDeadline: deadline!.toISOString(),
+    memberApproval,
+    nonMemberApproval,
   }
 }
 
@@ -260,7 +288,7 @@ export const eventHandlers = [
     if (isEnded(event)) {
       return problem(409, 'EVENT_ENDED', '終了したイベントは編集できません。')
     }
-    const input = validateEventInput((await request.json()) as Partial<EventInput>)
+    const input = validateEventInput((await request.json()) as Partial<EventInput>, event)
     if (input instanceof Response) {
       return input
     }
@@ -269,9 +297,18 @@ export const eventHandlers = [
     if (input.capacity < applied) {
       return problem(409, 'CAPACITY_BELOW_APPLIED', `定員を、今の申込み済みの人数（${applied}人）より少なくできません。`)
     }
+    // 変える前の承認の方法を覚えておく
+    const before = { member: event.memberApproval, nonMember: event.nonMemberApproval }
     Object.assign(event, input)
     // 締め切り前に定員を増やしたときは、増えた分だけキャンセル待ちの人を繰り上げる
     promoteWaitlist(event)
+    // 承認の方法を「自動」に変えたときは、承認待ちを申し込んだ順にまとめて承認する（要件定義書 5.12）
+    if (before.member !== 'auto' && event.memberApproval === 'auto') {
+      approveAllPending(event, true)
+    }
+    if (before.nonMember !== 'auto' && event.nonMemberApproval === 'auto') {
+      approveAllPending(event, false)
+    }
     return HttpResponse.json(toDetail(community, event, user.id))
   }),
 
@@ -305,7 +342,8 @@ export const eventHandlers = [
 
   /**
    * 申込者の一覧（GET /api/communities/:communityId/events/:eventId/applications）。オーナーと運営スタッフだけ。
-   * 申込み済みの人を申し込んだ日時の古い順、そのあとにキャンセル待ちの人を順番どおりに並べる。
+   * 承認待ちの人を申し込んだ順、申込み済みの人を席を取った順、キャンセル待ちの人を順番どおり、の順に並べる。
+   * 却下された人は出さない。
    */
   http.get('/api/communities/:communityId/events/:eventId/applications', async ({ request, params, cookies }) => {
     await delay(300)
@@ -320,10 +358,8 @@ export const eventHandlers = [
     if (!isManager(found.community.id, user.id)) {
       return forbidden()
     }
-    const applied = db.applications
-      .filter((a) => a.eventId === found.event.id && a.status === 'applied')
-      .sort((a, b) => a.appliedAt.localeCompare(b.appliedAt) || a.id - b.id)
-    const items: Application[] = [...applied, ...waitlistOf(found.event.id)].map((a) => ({
+    const id = found.event.id
+    const items: Application[] = [...pendingOf(id), ...appliedOf(id), ...waitlistOf(id)].map((a) => ({
       user: toUserRef(a.userId),
       ...toMyApplication(a),
     }))
@@ -331,8 +367,9 @@ export const eventHandlers = [
   }),
 
   /**
-   * イベントに申し込む（POST /api/communities/:communityId/events/:eventId/applications）。メンバーだけ。
-   * 空きがあれば申込み済み、満席ならキャンセル待ちになる。
+   * イベントに申し込む（POST /api/communities/:communityId/events/:eventId/applications）。
+   * だれが申し込めるか、すぐに席を取るかは、イベントの承認の方法で決まる（要件定義書 5.12）。
+   * 自動なら、空きがあれば申込み済み、満席ならキャンセル待ち。手動なら承認待ち。
    */
   http.post('/api/communities/:communityId/events/:eventId/applications', async ({ request, params, cookies }) => {
     await delay(300)
@@ -348,26 +385,82 @@ export const eventHandlers = [
     if (found instanceof Response) {
       return found
     }
-    const { community, event } = found
-    if (findRole(community.id, user.id) === null) {
-      return problem(403, 'NOT_MEMBER', 'イベントに申し込むには、コミュニティのメンバーになる必要があります。')
+    const { event } = found
+    // メンバーかどうかで、使う承認の方法が変わる
+    const approval = isMemberOf(event, user.id) ? event.memberApproval : event.nonMemberApproval
+    if (approval === 'closed') {
+      return problem(403, 'NOT_MEMBER', 'このイベントに申し込むには、コミュニティのメンバーになる必要があります。')
     }
-    if (db.applications.some((a) => a.eventId === event.id && a.userId === user.id)) {
+    const existing = db.applications.find((a) => a.eventId === event.id && a.userId === user.id)
+    if (existing?.status === 'rejected') {
+      // 却下された人は、同じイベントに申し込み直せない
+      return problem(409, 'APPLICATION_REJECTED', 'このイベントへの申込みは、却下されています。')
+    }
+    if (existing) {
       return problem(409, 'ALREADY_APPLIED', 'すでに申し込んでいます。')
     }
     if (isDeadlinePassed(event)) {
       return problem(409, 'APPLICATION_DEADLINE_PASSED', '申込みの締め切りを過ぎています。')
     }
-    // 空きがあれば申込み済み、なければキャンセル待ち（F-15）
+    // 手動なら承認待ち（席は取らない）。自動なら、空きがあれば申込み済み、なければキャンセル待ち（F-15）
+    const now = new Date().toISOString()
+    const status = approval === 'manual' ? 'pending' : countApplied(event.id) < event.capacity ? 'applied' : 'waitlisted'
     const application: MockApplication = {
       id: nextId(db.applications),
       eventId: event.id,
       userId: user.id,
-      status: countApplied(event.id) < event.capacity ? 'applied' : 'waitlisted',
-      appliedAt: new Date().toISOString(),
+      status,
+      appliedAt: now,
+      queuedAt: status === 'pending' ? null : now,
     }
     db.applications.push(application)
     return HttpResponse.json(toMyApplication(application), { status: 201 })
+  }),
+
+  /**
+   * 承認待ちの申込みを、承認・却下する（PATCH /api/communities/:communityId/events/:eventId/applications/:userId）。
+   * オーナーと運営スタッフだけ。イベントの開始日時まで（要件定義書 5.12）。
+   */
+  http.patch('/api/communities/:communityId/events/:eventId/applications/:userId', async ({ request, params, cookies }) => {
+    await delay(300)
+    const user = requireLogin(cookies)
+    if (user instanceof Response) {
+      return user
+    }
+    const csrfError = checkCsrf(request, cookies)
+    if (csrfError) {
+      return csrfError
+    }
+    const found = findEvent(params)
+    if (found instanceof Response) {
+      return found
+    }
+    const { community, event } = found
+    if (!isManager(community.id, user.id)) {
+      return forbidden()
+    }
+    const body = (await request.json()) as { status?: unknown }
+    if (body.status !== 'approved' && body.status !== 'rejected') {
+      return problem(400, 'VALIDATION_ERROR', '入力内容に誤りがあります。', {
+        errors: [{ field: 'status', message: 'approved か rejected を指定してください。' }],
+      })
+    }
+    const application = db.applications.find((a) => a.eventId === event.id && a.userId === Number(params.userId))
+    if (!application) {
+      return problem(404, 'NOT_FOUND', '申込みが見つかりません。')
+    }
+    if (isStarted(event)) {
+      return problem(409, 'EVENT_STARTED', '開始したイベントの申込みは、承認・却下できません。')
+    }
+    if (application.status !== 'pending') {
+      return problem(409, 'APPLICATION_ALREADY_DECIDED', 'この申込みは、すでに承認または却下されています。')
+    }
+    if (body.status === 'approved') {
+      approveApplication(event, application)
+    } else {
+      rejectApplication(event, application)
+    }
+    return HttpResponse.json({ user: toUserRef(application.userId), ...toMyApplication(application) })
   }),
 
   /**
@@ -391,7 +484,8 @@ export const eventHandlers = [
     if (isEnded(found.event)) {
       return problem(409, 'EVENT_ENDED', '終了したイベントの申込みは、取り消せません。')
     }
-    const mine = db.applications.find((a) => a.eventId === found.event.id && a.userId === user.id)
+    // 却下された申込みは、取り消せない
+    const mine = db.applications.find((a) => a.eventId === found.event.id && a.userId === user.id && a.status !== 'rejected')
     if (!mine) {
       return problem(409, 'NOT_APPLIED', 'このイベントには申し込んでいません。')
     }

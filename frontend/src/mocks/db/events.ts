@@ -23,6 +23,10 @@ export type MockEvent = {
   applicationDeadline: string
   location: string
   capacity: number
+  // 参加の承認の方法（要件定義書 5.12）。メンバー：auto（自動）か manual（手動）
+  memberApproval: 'auto' | 'manual'
+  // メンバー以外：auto（自動）、manual（手動）、closed（受け付けない）
+  nonMemberApproval: 'auto' | 'manual' | 'closed'
   // イベントが作られた日時（一覧の並び順に使う）
   createdAt: string
 }
@@ -34,9 +38,12 @@ export type MockApplication = {
   id: number
   eventId: number
   userId: number
-  // applied：申込み済み、waitlisted：キャンセル待ち
-  status: 'applied' | 'waitlisted'
+  // pending：承認待ち、applied：申込み済み、waitlisted：キャンセル待ち、rejected：却下
+  status: 'pending' | 'applied' | 'waitlisted' | 'rejected'
   appliedAt: string
+  // 席の順番を取った日時（キャンセル待ちの順番と、繰り上げの順番に使う）。
+  // 自動なら申し込んだ日時、手動なら承認された日時。承認待ち・却下のときは null
+  queuedAt: string | null
 }
 
 // イベントのタイトルに使う「話題」と「形式」。組み合わせて、いろいろなタイトルを作る
@@ -93,6 +100,10 @@ export function createEvents(communities: MockCommunity[], now: number): MockEve
       location: locations[i % locations.length],
       // 定員：10〜40人
       capacity: 10 + (i % 4) * 10,
+      // 承認の方法：20件に1件はメンバーもメンバー以外も手動、別の20件に1件はメンバー以外も自動。
+      // それ以外は最初の値（メンバーは自動、メンバー以外は受け付けない）。本物の API の開発用データと同じ
+      memberApproval: i % 20 === 10 ? 'manual' : 'auto',
+      nonMemberApproval: i % 20 === 10 ? 'manual' : i % 20 === 15 ? 'auto' : 'closed',
       // 作成日時：番号が大きいほど新しい（i 時間前に作られたことにする）
       createdAt: new Date(now - (EVENT_COUNT - i) * HOUR).toISOString(),
     })
@@ -125,6 +136,7 @@ export function createApplications(events: MockEvent[]): MockApplication[] {
         userId: FIRST_DUMMY_USER_ID + n,
         status: 'applied',
         appliedAt,
+        queuedAt: appliedAt,
       })
     }
 
@@ -138,10 +150,25 @@ export function createApplications(events: MockEvent[]): MockApplication[] {
           userId: FIRST_DUMMY_USER_ID + event.capacity + n,
           status: 'waitlisted',
           appliedAt: new Date(appliedTime + (n + 1) * 60 * 1000).toISOString(),
+          queuedAt: new Date(appliedTime + (n + 1) * 60 * 1000).toISOString(),
         })
       }
     }
   })
+
+  // 承認待ちの申込み（承認・却下を試すため）：手動のイベント 11 に、じろう（3、メンバー）とさくら（4、メンバー以外）
+  const manualEvent = events[10]
+  const pendingTime = new Date(manualEvent.createdAt).getTime() + 30 * 60 * 1000
+  for (const [n, userId] of [3, 4].entries()) {
+    applications.push({
+      id: applications.length + 1,
+      eventId: manualEvent.id,
+      userId,
+      status: 'pending',
+      appliedAt: new Date(pendingTime + n * 60 * 1000).toISOString(),
+      queuedAt: null,
+    })
+  }
 
   return applications
 }

@@ -122,12 +122,15 @@ public abstract class ApiTestBase {
 
     /**
      * 【何のため】申込みを作る。minutesAgo は、何分前に申し込んだことにするか（大きいほど先に申し込んだ）。
+     * 申込み済み・キャンセル待ちなら、席の順番（queued_at）も、申し込んだ日時と同じにする。
+     * 承認待ち（pending）・却下（rejected）なら、席の順番は取らない（NULL）。
      */
     protected void insertApplication(long eventId, long userId, String status, int minutesAgo) {
         jdbcTemplate.update("""
-                INSERT INTO applications (event_id, user_id, status, applied_at)
-                VALUES (?, ?, ?, now() - make_interval(mins => ?))
-                """, eventId, userId, status, minutesAgo);
+                INSERT INTO applications (event_id, user_id, status, applied_at, queued_at)
+                SELECT ?, ?, ?, t, CASE WHEN ? IN ('applied', 'waitlisted') THEN t END
+                FROM (SELECT now() - make_interval(mins => ?) AS t) x
+                """, eventId, userId, status, status, minutesAgo);
     }
 
     /**

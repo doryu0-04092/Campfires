@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -21,6 +22,8 @@ import jakarta.validation.constraints.Size;
  * @param applicationDeadline 申込み締め切り日時（キャンセルの期限も兼ねる）
  * @param location            場所（1〜200文字）
  * @param capacity            定員（1〜1000人）
+ * @param memberApproval      コミュニティのメンバーの承認の方法（auto か manual）。送られてこなければ、作成では auto、編集では今のまま
+ * @param nonMemberApproval   メンバー以外の承認の方法（auto、manual、closed）。送られてこなければ、作成では closed、編集では今のまま
  */
 public record EventInput(
         @NotBlank(message = "タイトルを入力してください。")
@@ -41,7 +44,13 @@ public record EventInput(
         @NotNull(message = "定員は1〜1000人の整数にしてください。")
         @Min(value = 1, message = "定員は1〜1000人の整数にしてください。")
         @Max(value = 1000, message = "定員は1〜1000人の整数にしてください。")
-        Integer capacity) {
+        Integer capacity,
+
+        @Pattern(regexp = "auto|manual", message = "メンバーの承認の方法は、自動か手動を選んでください。")
+        String memberApproval,
+
+        @Pattern(regexp = "auto|manual|closed", message = "メンバー以外の承認の方法は、自動・手動・受け付けないのどれかを選んでください。")
+        String nonMemberApproval) {
 
     /**
      * 【何のため】タイトル、説明、場所の前後の空白を取り除く。説明が送られてこなかったときは、空の文字にする。

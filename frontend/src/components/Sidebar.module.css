@@ -22,18 +22,53 @@
   margin-top: 24px;
 }
 
-/* まとまりの見出し（「ユーザー」「コミュニティ管理」） */
+/* まとまりの見出し（「ユーザー」「コミュニティ管理」「イベント管理」）。下の項目との間を少し空ける */
 .groupTitle {
-  margin: 0;
+  margin: 0 0 8px;
   font-size: 15px;
   color: var(--text);
 }
 
-/* 見出しの下の説明（誰向けのメニューか）：小さく、少し薄い文字にする */
-.groupDescription {
-  margin: 2px 0 8px;
-  font-size: 12px;
+/*
+ * 管理メニュー（オーナー・運営スタッフ用）のまとまり：
+ * 「ユーザー」のまとまりから大きく間を空け、区切り線を引いて、利用者のメニューと分かれていることを示す
+ */
+.manage {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid #e8dfd6;
+}
+
+/* 管理メニューを開け閉めするボタン：行全体を押せるようにし、見出しのように見せる */
+.manageToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
   color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: bold;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manageToggle:hover {
+  background: #f3ebe3;
+}
+
+/* 開いている・閉じているの印（▼、▶）：小さめにする */
+.manageMark {
+  font-size: 10px;
+}
+
+/* 管理メニューの中の、最初のまとまり（コミュニティ管理）の上を少し空ける */
+.manage .group:first-child {
+  margin-top: 12px;
 }
 
 /* 項目の一覧：先頭の「・」と余白を消す */

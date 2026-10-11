@@ -32,9 +32,30 @@ export type EventSummary = {
 }
 
 /**
- * 【何のため】申込みの状態。applied：申込み済み、waitlisted：キャンセル待ち。
+ * 【何のため】申込みの状態。
+ * pending：承認待ち、applied：申込み済み、waitlisted：キャンセル待ち、rejected：却下（要件定義書 5.12）
  */
-export type ApplicationStatus = 'applied' | 'waitlisted'
+export type ApplicationStatus = 'pending' | 'applied' | 'waitlisted' | 'rejected'
+
+/**
+ * 【何のため】コミュニティのメンバーの、参加の承認の方法。auto：自動、manual：手動（要件定義書 5.12）
+ */
+export type MemberApproval = 'auto' | 'manual'
+
+/**
+ * 【何のため】メンバー以外の、参加の承認の方法。auto：自動、manual：手動、closed：受け付けない
+ */
+export type NonMemberApproval = 'auto' | 'manual' | 'closed'
+
+/**
+ * 【何のため】承認の方法を、画面に表示する日本語に変えるための表。
+ * Record<型, string> は「その型の値ごとに、文字を1つずつ決めた表」という意味
+ */
+export const APPROVAL_LABELS: Record<NonMemberApproval, string> = {
+  auto: '自動で承認',
+  manual: '手動で承認',
+  closed: '受け付けない',
+}
 
 /**
  * 【何のため】自分の申込みの状況。
@@ -57,6 +78,11 @@ export type EventDetail = EventSummary & {
   applicationDeadline: string
   // キャンセル待ちの人数
   waitlistCount: number
+  // 承認待ちの人数（定員には数えない）
+  pendingCount: number
+  // 参加の承認の方法（コミュニティのメンバー、メンバー以外）
+  memberApproval: MemberApproval
+  nonMemberApproval: NonMemberApproval
   // コミュニティをアーカイブした日時（していなければ null）
   communityArchivedAt: string | null
   // コミュニティでの自分の立場（メンバーでない、またはログインしていないときは null）
@@ -78,6 +104,9 @@ export type EventInput = {
   applicationDeadline: string
   location: string
   capacity: number
+  // 参加の承認の方法
+  memberApproval: MemberApproval
+  nonMemberApproval: NonMemberApproval
 }
 
 /**

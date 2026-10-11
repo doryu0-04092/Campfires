@@ -10,7 +10,7 @@ import com.campfires.account.UserRef;
  *
  * @param userId           申し込んだ人の番号
  * @param nickname         ニックネーム（アカウントを削除していれば null）
- * @param status           applied（申込み済み）か waitlisted（キャンセル待ち）
+ * @param status           pending（承認待ち）、applied（申込み済み）、waitlisted（キャンセル待ち）、rejected（却下）のどれか
  * @param waitlistPosition キャンセル待ちの何番目か。申込み済みなら null
  * @param appliedAt        申し込んだ日時
  */

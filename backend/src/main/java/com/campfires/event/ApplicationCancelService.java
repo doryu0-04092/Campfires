@@ -49,6 +49,7 @@ public class ApplicationCancelService {
 
     /**
      * 【何のため】申込みを1件取り消し、要件定義書のルールどおりに後の処理をする。
+     * - 承認待ち：席を使っていないので、取り消すだけ（繰り上げもお知らせもしない。5.12）
      * - 締め切り前：申込み済みの人が取り消したときは、キャンセル待ちの先頭の人を繰り上げる（5.3）
      * - 締め切り後：繰り上げない。オーナーと運営スタッフにお知らせを送る（5.2、5.10）
      * @return 取り消したかどうか（申込みがなければ false）
@@ -63,6 +64,10 @@ public class ApplicationCancelService {
         }
         applicationMapper.delete(target.applicationId());
 
+        if (target.isPending()) {
+            // 承認待ちは席を使っていないので、ほかに何もしない
+            return true;
+        }
         if (target.deadlinePassed()) {
             // 締め切り後のキャンセル：オーナーと運営スタッフに知らせる（操作した本人を除く）
             notificationMapper.insertLateCancellation(eventId, userId, operatorUserId);

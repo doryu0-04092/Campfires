@@ -63,13 +63,13 @@
 
     <!--
       キャンセル待ちの何番目か：同じイベントのキャンセル待ちのうち、自分より先に（または同じ日時で番号が小さく）
-      申し込んだ人の数 + 自分。(日時, 番号) &lt;= (日時, 番号) は、2つの値を順番に比べる書き方
+      席の順番を取った人の数 + 自分。(日時, 番号) &lt;= (日時, 番号) は、2つの値を順番に比べる書き方
     -->
     <sql id="waitlistPosition">
         CASE WHEN my.status = 'waitlisted' THEN (
             SELECT count(*)::int FROM applications w
             WHERE w.event_id = my.event_id AND w.status = 'waitlisted'
-              AND (w.applied_at, w.id) &lt;= (my.applied_at, my.id)
+              AND (w.queued_at, w.id) &lt;= (my.queued_at, my.id)
         ) END
     </sql>
 
@@ -114,6 +114,9 @@
                e.title, e.description, e.start_at, e.end_at, e.application_deadline, e.location, e.capacity,
                <include refid="appliedCount"/> AS applied_count,
                (SELECT count(*) FROM applications a WHERE a.event_id = e.id AND a.status = 'waitlisted') AS waitlist_count,
+               (SELECT count(*) FROM applications a WHERE a.event_id = e.id AND a.status = 'pending') AS pending_count,
+               e.member_approval, e.non_member_approval,
+               e.start_at &lt;= now() AS started,
                e.end_at &lt;= now() AS ended,
                e.application_deadline &lt;= now() AS deadline_passed,
                e.created_at
@@ -139,9 +142,11 @@
 
     <!-- input.title のように、渡したデータ（ValidEventInput）の項目を「.」でつないで使える -->
     <select id="insert" resultType="long" flushCache="true">
-        INSERT INTO events (community_id, title, description, start_at, end_at, application_deadline, location, capacity)
+        INSERT INTO events (community_id, title, description, start_at, end_at, application_deadline, location, capacity,
+                            member_approval, non_member_approval)
         VALUES (#{communityId}, #{input.title}, #{input.description}, #{input.startAt}, #{input.endAt},
-                #{input.applicationDeadline}, #{input.location}, #{input.capacity})
+                #{input.applicationDeadline}, #{input.location}, #{input.capacity},
+                #{input.memberApproval}, #{input.nonMemberApproval})
         RETURNING id
     </select>
 
@@ -153,7 +158,9 @@
             end_at = #{input.endAt},
             application_deadline = #{input.applicationDeadline},
             location = #{input.location},
-            capacity = #{input.capacity}
+            capacity = #{input.capacity},
+            member_approval = #{input.memberApproval},
+            non_member_approval = #{input.nonMemberApproval}
         WHERE id = #{eventId}
     </update>
 

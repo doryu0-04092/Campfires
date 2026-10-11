@@ -18,6 +18,8 @@ import com.campfires.common.security.LoginUser;
 import com.campfires.common.web.PageResponse;
 import com.campfires.common.web.SearchPageResponse;
 
+import jakarta.validation.Valid;
+
 /**
  * 【役割】イベントと申込みの API（docs/api/openapi.yaml の events、applications と、account の /api/me/events）。
  * 【なぜ必要か】画面から届いたデータを受け取り、EventService と ApplicationService に処理を頼み、結果を返事にするため。
@@ -122,6 +124,16 @@ public class EventController {
             @PathVariable long communityId, @PathVariable long eventId) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(applicationService.apply(loginUser.id(), communityId, eventId));
+    }
+
+    /**
+     * 【何のため】承認待ちの申込みを、承認・却下する（PATCH /api/communities/{communityId}/events/{eventId}/applications/{userId}）。
+     * オーナーと運営スタッフだけ。処理した後の申込みを返す。
+     */
+    @PatchMapping("/api/communities/{communityId}/events/{eventId}/applications/{userId}")
+    public ApplicationResponse decide(@AuthenticationPrincipal LoginUser loginUser, @PathVariable long communityId,
+            @PathVariable long eventId, @PathVariable long userId, @Valid @RequestBody DecideApplicationRequest body) {
+        return applicationService.decide(loginUser.id(), communityId, eventId, userId, body.status());
     }
 
     /**

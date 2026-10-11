@@ -2,16 +2,18 @@
  * 【役割】イベントの内容を入力するフォーム（作成と編集で共通）。
  * 【なぜ必要か】作成の画面（S-08）と編集の画面（S-10）は入力欄が同じなので、1つの部品にまとめる。
  * 場所の入力欄の近くには、個人の住所を書かないよう注意書きを出す（要件定義書 5.2）。
+ * 参加の承認の方法（メンバー、メンバー以外）も、ここで選ぶ（要件定義書 5.12）。
  * 日時は、この PC の時刻（日本時間）で入力し、API には世界標準時に直して送る。
  */
 
 import { useState, type FormEvent } from 'react'
 import { ApiError } from '../api/client'
-import type { EventInput } from '../types/event'
+import { APPROVAL_LABELS, type EventInput, type MemberApproval, type NonMemberApproval } from '../types/event'
 import { toFieldMessages } from '../utils/fieldErrors'
 import { fromDateTimeLocal, toDateTimeLocal } from '../utils/formatDateTime'
 import FormField from './FormField'
 import styles from './Form.module.css'
+import SelectField from './SelectField'
 import TextAreaField from './TextAreaField'
 
 type EventFormProps = {
@@ -36,6 +38,9 @@ function EventForm({ initialValue, submitLabel, onSubmit }: EventFormProps) {
   const [location, setLocation] = useState(initialValue?.location ?? '')
   // 定員は数だが、入力欄では文字として持ち、送るときに数に変える（空のときを扱いやすくするため）
   const [capacity, setCapacity] = useState(initialValue ? String(initialValue.capacity) : '')
+  // 参加の承認の方法。作成のときは、メンバーは自動、メンバー以外は受け付けない（最初の値）
+  const [memberApproval, setMemberApproval] = useState<MemberApproval>(initialValue?.memberApproval ?? 'auto')
+  const [nonMemberApproval, setNonMemberApproval] = useState<NonMemberApproval>(initialValue?.nonMemberApproval ?? 'closed')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -56,6 +61,8 @@ function EventForm({ initialValue, submitLabel, onSubmit }: EventFormProps) {
         location,
         // 空なら 0 を送る（API が「1〜1000人の整数にしてください」のエラーを返す）
         capacity: capacity === '' ? 0 : Number(capacity),
+        memberApproval,
+        nonMemberApproval,
       })
     } catch (error) {
       if (error instanceof ApiError && error.code === 'VALIDATION_ERROR') {
@@ -142,6 +149,32 @@ function EventForm({ initialValue, submitLabel, onSubmit }: EventFormProps) {
         onChange={(e) => setCapacity(e.target.value)}
         hint="1〜1000人"
         error={fieldMessages.capacity}
+      />
+      {/* 参加の承認の方法（要件定義書 5.12）。e.target.value は文字なので、as で決まった値の型として扱う */}
+      <SelectField
+        id="event-member-approval"
+        label="コミュニティのメンバーの参加"
+        value={memberApproval}
+        onChange={(e) => setMemberApproval(e.target.value as MemberApproval)}
+        options={[
+          { value: 'auto', label: APPROVAL_LABELS.auto },
+          { value: 'manual', label: APPROVAL_LABELS.manual },
+        ]}
+        hint="自動：申し込むとすぐに参加が決まります。手動：オーナーか運営スタッフが承認したときに、席が確保されます。"
+        error={fieldMessages.memberApproval}
+      />
+      <SelectField
+        id="event-non-member-approval"
+        label="メンバー以外の参加"
+        value={nonMemberApproval}
+        onChange={(e) => setNonMemberApproval(e.target.value as NonMemberApproval)}
+        options={[
+          { value: 'closed', label: APPROVAL_LABELS.closed },
+          { value: 'auto', label: APPROVAL_LABELS.auto },
+          { value: 'manual', label: APPROVAL_LABELS.manual },
+        ]}
+        hint="コミュニティに参加していない人も申し込めるようにするかを選びます。手動から自動に変えると、承認待ちの申込みは、申し込んだ順にまとめて承認されます。"
+        error={fieldMessages.nonMemberApproval}
       />
       <div className={styles.actions}>
         <button type="submit" className={styles.submit} disabled={isSubmitting}>
