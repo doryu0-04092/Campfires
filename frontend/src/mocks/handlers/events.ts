@@ -18,7 +18,7 @@ import {
   promoteWaitlist,
   waitlistOf,
 } from '../rules'
-import { searchEvents, toEventSummary } from '../searchEvents'
+import { searchEvents, toEventSummary } from '../search'
 import { checkCsrf, findLoggedInUser, findRole, paginate, parsePage, problem, requireLogin, toUserRef } from './common'
 import { Validator } from './validation'
 
@@ -139,6 +139,28 @@ function isManager(communityId: number, userId: number): boolean {
 }
 
 export const eventHandlers = [
+  /**
+   * 自分が申し込んだイベントの一覧（GET /api/me/events）。
+   * 開催前のイベント（キャンセル待ちを含む）を、開始日時の近い順に全件返す（要件定義書 5.8）。
+   */
+  http.get('/api/me/events', async ({ cookies }) => {
+    await delay(300)
+    const user = requireLogin(cookies)
+    if (user instanceof Response) {
+      return user
+    }
+    const items = db.applications
+      .filter((a) => a.userId === user.id)
+      // 申込みと、そのイベントを組にする
+      .map((application) => ({ application, event: db.events.find((e) => e.id === application.eventId)! }))
+      // 終了したイベントは出さない
+      .filter(({ event }) => !isEnded(event))
+      // 開始日時の近い順
+      .sort((a, b) => a.event.startAt.localeCompare(b.event.startAt))
+      .map(({ application, event }) => ({ ...toEventSummary(db, event), myApplication: toMyApplication(application) }))
+    return HttpResponse.json({ items })
+  }),
+
   /**
    * イベントの一覧・検索（GET /api/events）。例：GET /api/events?q=Java+初心者&page=2
    */

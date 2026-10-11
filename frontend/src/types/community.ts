@@ -40,6 +40,15 @@ export type CommunitySummary = {
  */
 export type CommunityListResponse = PageInfo & {
   items: CommunitySummary[]
+  // 検索結果が 300件を超えたかどうか
+  limitExceeded: boolean
+}
+
+/**
+ * 【何のため】自分がメンバーとして参加しているコミュニティの一覧の返事（全件。ページに分けない）。
+ */
+export type MyCommunityListResponse = {
+  items: CommunitySummary[]
 }
 
 /**
