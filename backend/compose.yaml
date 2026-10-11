@@ -1,0 +1,16 @@
+# 【役割】開発用の PostgreSQL（データベース）を、Docker で動かすための設定。
+# 【なぜ必要か】PC に PostgreSQL を直接インストールせずに、誰の PC でも同じデータベースを動かせるようにするため（技術構成 3章）。
+# Spring Boot の「Docker Compose の対応」（spring-boot-docker-compose）が、アプリの起動時にこのファイルを読み、
+# データベースを自動で起動して、つなぎ先も自動で設定してくれる。
+services:
+  postgres:
+    # PostgreSQL の版を固定する（latest にすると、知らないうちに版が上がって動きが変わることがあるため）
+    image: 'postgres:17'
+    environment:
+      # データベースの名前、利用者名、パスワード。開発用の値で、本番では使わない
+      - 'POSTGRES_DB=campfires'
+      - 'POSTGRES_USER=campfires'
+      - 'POSTGRES_PASSWORD=campfires-dev'
+    ports:
+      # データベースの入口。PC 側の番号は自動で決まり、Spring Boot がその番号につなぐ
+      - '5432'

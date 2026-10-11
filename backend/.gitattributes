@@ -1,0 +1,6 @@
+# 【役割】ファイルの改行の文字を、ファイルの種類ごとに決める設定。
+# 【なぜ必要か】mvnw（Mac・Linux 用）は LF、mvnw.cmd（Windows 用）は CRLF でないと動かないため。
+# Spring Initializr が作ったもの。
+
+/mvnw text eol=lf
+*.cmd text eol=crlf
