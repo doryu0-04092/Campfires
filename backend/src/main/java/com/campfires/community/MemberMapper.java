@@ -65,15 +65,17 @@ public interface MemberMapper {
 
     /**
      * 【何のため】メンバーの数を数える。
+     * @param group managers ならオーナーと運営スタッフだけ、members なら一般のメンバーだけ、null なら全員
      */
-    long countMembers(@Param("communityId") long communityId);
+    long countMembers(@Param("communityId") long communityId, @Param("group") String group);
 
     /**
      * 【何のため】メンバーの1ページ分を、立場の順（オーナー → 運営スタッフ → メンバー）、
      * 同じ立場なら参加した日時の古い順に返す。
+     * @param group managers ならオーナーと運営スタッフだけ、members なら一般のメンバーだけ、null なら全員
      */
-    List<MemberRow> findMembers(@Param("communityId") long communityId, @Param("limit") int limit,
-            @Param("offset") long offset);
+    List<MemberRow> findMembers(@Param("communityId") long communityId, @Param("group") String group,
+            @Param("limit") int limit, @Param("offset") long offset);
 
     /**
      * 【何のため】メンバーを1人探す。メンバーでなければ null。

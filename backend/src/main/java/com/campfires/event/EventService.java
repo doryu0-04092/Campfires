@@ -72,6 +72,17 @@ public class EventService {
     }
 
     /**
+     * 【何のため】自分がオーナーか運営スタッフをしているコミュニティのイベントの一覧（S-19 イベントを選ぶ画面）。
+     * status が past なら終了済み、それ以外は開催前。
+     */
+    public PageResponse<ManagedEvent> findManaged(long userId, String status, String pageValue) {
+        boolean past = "past".equals(status);
+        int page = Paging.parsePage(pageValue);
+        long total = eventMapper.countManaged(userId, past);
+        return PageResponse.of(eventMapper.findManaged(userId, past, Paging.PAGE_SIZE, Paging.offset(page)), total, page);
+    }
+
+    /**
      * 【何のため】イベントの詳細を返す。ログインしていれば、自分との関係も入れる。
      * @param viewerId 見ている人の番号。ログインしていなければ null
      */

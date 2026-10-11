@@ -61,11 +61,13 @@ public class MemberController {
 
     /**
      * 【何のため】メンバーの一覧（GET /api/communities/{communityId}/members）。
+     * group=managers ならオーナーと運営スタッフだけ、group=members なら一般のメンバーだけを返す。
      */
     @GetMapping("/api/communities/{communityId}/members")
     public PageResponse<MemberResponse> listMembers(@AuthenticationPrincipal LoginUser loginUser,
-            @PathVariable long communityId, @RequestParam(required = false) String page) {
-        return memberService.listMembers(loginUser.id(), communityId, page);
+            @PathVariable long communityId, @RequestParam(required = false) String page,
+            @RequestParam(required = false) String group) {
+        return memberService.listMembers(loginUser.id(), communityId, page, group);
     }
 
     /**

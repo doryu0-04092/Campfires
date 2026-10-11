@@ -25,6 +25,8 @@ import MemberManagementPage from './pages/MemberManagementPage'
 import EventCreatePage from './pages/EventCreatePage'
 import EventEditPage from './pages/EventEditPage'
 import ApplicantListPage from './pages/ApplicantListPage'
+import SelectCommunityPage from './pages/SelectCommunityPage'
+import SelectEventPage from './pages/SelectEventPage'
 // 共通の画面
 import SignupPage from './pages/SignupPage'
 import LoginPage from './pages/LoginPage'
@@ -75,6 +77,13 @@ export const router = createBrowserRouter([
               { path: 'communities/:communityId/events/new', Component: EventCreatePage },       // S-08
               { path: 'communities/:communityId/events/:eventId/edit', Component: EventEditPage },            // S-10
               { path: 'communities/:communityId/events/:eventId/applicants', Component: ApplicantListPage },  // S-11
+              // 左のメニューから開く「対象を選ぶ」画面（Issue #45）。同じ画面を、何をするか（purpose）を変えて使う。
+              // element は、Component の代わりに「値を渡した画面」を書くときの書き方
+              { path: 'select/community-edit', element: <SelectCommunityPage purpose="community-edit" /> },  // S-18
+              { path: 'select/members', element: <SelectCommunityPage purpose="members" /> },                // S-18
+              { path: 'select/event-create', element: <SelectCommunityPage purpose="event-create" /> },      // S-18
+              { path: 'select/event-edit', element: <SelectEventPage purpose="event-edit" /> },              // S-19
+              { path: 'select/applicants', element: <SelectEventPage purpose="applicants" /> },              // S-19
             ],
           },
         ],

@@ -44,6 +44,19 @@ public interface EventMapper {
             @Param("limit") int limit, @Param("offset") long offset);
 
     /**
+     * 【何のため】自分がオーナーか運営スタッフをしているコミュニティのイベントの数を数える。
+     * @param past true なら終了済み、false なら開催前
+     */
+    long countManaged(@Param("userId") long userId, @Param("past") boolean past);
+
+    /**
+     * 【何のため】自分がオーナーか運営スタッフをしているコミュニティのイベントの1ページ分を返す。
+     * 開催前は開始日時の近い順、終了済みは開始日時の新しい順。
+     */
+    List<ManagedEvent> findManaged(@Param("userId") long userId, @Param("past") boolean past,
+            @Param("limit") int limit, @Param("offset") long offset);
+
+    /**
      * 【何のため】コミュニティとイベントの番号で、イベントを探す。
      * イベントが、そのコミュニティのものでなければ null（見つからないものとして扱う）。
      */

@@ -304,6 +304,39 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/me/managed-events:
+    get:
+      operationId: listManagedEvents
+      summary: 管理しているイベントの一覧を取得する（S-19）
+      description: |
+        自分がオーナーか運営スタッフをしているコミュニティ（アーカイブ済みを含む）のイベントを返します。
+        左のメニューの「イベント編集」「申込者一覧」で、どのイベントを開くかを選ぶ画面に使います（Issue #45）。
+        - status=upcoming（初期値）：開催前のイベントを、開始日時の近い順
+        - status=past：終了したイベントを、開始日時の新しい順
+        - 承認待ちの人数と、そのコミュニティでの自分の立場も返す
+      tags: [account]
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: upcoming（開催前）か past（終了済み）
+          schema:
+            type: string
+            enum: [upcoming, past]
+            default: upcoming
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedEventListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   # ==================== コミュニティ（communities） ====================
 
   /api/communities:
@@ -627,6 +660,7 @@ paths:
         コミュニティのメンバー（オーナー、運営スタッフを含む）を、立場の順（オーナー → 運営スタッフ → メンバー）、
         同じ立場なら参加した日時の古い順に返します。
         オーナーと運営スタッフだけができます。返す名前はニックネームだけです（README 1.9）。
+        group を付けると、立場で絞れます（メンバー管理の画面で、オーナー・運営スタッフと一般のメンバーを分けて表示するため）。
 
         返す code
         - FORBIDDEN（403）：オーナーでも運営スタッフでもない
@@ -634,6 +668,14 @@ paths:
       security:
         - sessionCookie: []
       parameters:
+        - name: group
+          in: query
+          required: false
+          description: |
+            managers：オーナーと運営スタッフだけ、members：一般のメンバーだけ。付けなければ全員
+          schema:
+            type: string
+            enum: [managers, members]
         - $ref: '#/components/parameters/Page'
       responses:
         '200':
@@ -1826,6 +1868,34 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MyEvent'
+
+    ManagedEvent:
+      description: 管理しているイベント1件分。一覧の情報に、承認待ちの人数と、自分の立場を足したもの
+      allOf:
+        - $ref: '#/components/schemas/EventSummary'
+        - type: object
+          required: [pendingCount, myRole]
+          properties:
+            pendingCount:
+              type: integer
+              description: 承認待ちの人数
+              example: 0
+            myRole:
+              description: そのコミュニティでの自分の立場（owner か staff）
+              allOf:
+                - $ref: '#/components/schemas/CommunityRole'
+
+    ManagedEventListResponse:
+      description: 管理しているイベントの一覧の返事
+      allOf:
+        - $ref: '#/components/schemas/PageInfo'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ManagedEvent'
 
     CommunityEventListResponse:
       description: コミュニティのイベントの一覧の返事

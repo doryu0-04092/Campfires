@@ -58,6 +58,16 @@ public class EventController {
     }
 
     /**
+     * 【何のため】管理しているイベントの一覧（GET /api/me/managed-events）。
+     * 左のメニューの「イベント編集」「申込者一覧」で、どのイベントを開くかを選ぶ画面に使う。
+     */
+    @GetMapping("/api/me/managed-events")
+    public PageResponse<ManagedEvent> managedEvents(@AuthenticationPrincipal LoginUser loginUser,
+            @RequestParam(required = false) String status, @RequestParam(required = false) String page) {
+        return eventService.findManaged(loginUser.id(), status, page);
+    }
+
+    /**
      * 【何のため】コミュニティのイベントの一覧（GET /api/communities/{communityId}/events）。ログインしていなくても呼べる。
      */
     @GetMapping("/api/communities/{communityId}/events")

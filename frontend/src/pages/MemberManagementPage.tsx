@@ -3,6 +3,7 @@
  * 【なぜ必要か】参加申請の承認・却下（F-07）、運営スタッフの任命・解除（F-09）、メンバーの除名（F-19）を行うため。
  * オーナーと運営スタッフが使える。任命・解除と除名は、オーナーだけ（要件定義書 3章）。
  * 表示する名前はニックネームだけ（要件定義書 5.6）。
+ * メンバーの一覧は、「オーナー・運営スタッフ」を上の別枠にし、その下に一般の「メンバー」を並べる（Issue #45）。
  */
 
 import { useState } from 'react'
@@ -23,7 +24,7 @@ import Pagination from '../components/Pagination'
 import { ROLE_LABELS, type CommunityDetail, type Member } from '../types/community'
 import { displayName } from '../types/user'
 import { formatDateTime } from '../utils/formatDateTime'
-import { pageHref, parsePage } from '../utils/page'
+import { parsePage } from '../utils/page'
 import { useLoader } from '../utils/useLoader'
 
 /**
@@ -63,7 +64,19 @@ function MemberManagementContent({ community }: { community: CommunityDetail }) 
         <Link to={`/communities/${community.id}`}>コミュニティの詳細へ戻る</Link>
       </p>
       <JoinRequestSection community={community} onApproved={() => setMembersVersion((v) => v + 1)} />
-      <MemberSection community={community} version={membersVersion} />
+      {/* 任命・解除すると、人が2つの枠の間を移るので、どちらの枠も読み込み直す（onChanged） */}
+      <MemberSection
+        community={community}
+        group="managers"
+        version={membersVersion}
+        onChanged={() => setMembersVersion((v) => v + 1)}
+      />
+      <MemberSection
+        community={community}
+        group="members"
+        version={membersVersion}
+        onChanged={() => setMembersVersion((v) => v + 1)}
+      />
     </section>
   )
 }
@@ -147,29 +160,52 @@ function JoinRequestSection({ community, onApproved }: { community: CommunityDet
 }
 
 /**
- * 【何のため】メンバーの一覧と、運営スタッフの任命・解除、除名のボタンを表示する（F-09、F-19）。
+ * 【何のため】枠ごとの設定。
+ * - title：枠の見出し
+ * - pageParam：ページ番号を入れる URL の名前（2つの枠で、別々にページを切り替えられるように分ける）
+ * - emptyMessage：だれもいないときの文
+ */
+const GROUP_SETTINGS = {
+  managers: { title: 'オーナー・運営スタッフ', pageParam: 'staffPage', emptyMessage: '' },
+  members: { title: 'メンバー', pageParam: 'page', emptyMessage: '一般のメンバーは、まだいません。' },
+}
+
+/**
+ * 【何のため】メンバーの一覧の1つの枠と、運営スタッフの任命・解除、除名のボタンを表示する（F-09、F-19）。
+ * group が managers ならオーナーと運営スタッフ、members なら一般のメンバーを表示する。
  * 任命・解除と除名のボタンは、オーナーにだけ出す。
  */
-function MemberSection({ community, version }: { community: CommunityDetail; version: number }) {
+function MemberSection({
+  community,
+  group,
+  version,
+  onChanged,
+}: {
+  community: CommunityDetail
+  group: 'managers' | 'members'
+  version: number
+  onChanged: () => void
+}) {
+  const setting = GROUP_SETTINGS[group]
   const [searchParams] = useSearchParams()
-  const page = parsePage(searchParams.get('page'))
-  // version が変わったとき（参加申請を承認したとき）も、読み込み直す
-  const { isLoading, data, error, reload } = useLoader(`members:${community.id}:${page}:${version}`, (signal) =>
-    fetchMembers(community.id, page, signal),
+  const page = parsePage(searchParams.get(setting.pageParam))
+  // version が変わったとき（参加申請を承認したとき、任命・解除・除名したとき）も、読み込み直す
+  const { isLoading, data, error } = useLoader(`members:${community.id}:${group}:${page}:${version}`, (signal) =>
+    fetchMembers(community.id, group, page, signal),
   )
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyUserId, setBusyUserId] = useState<number | null>(null)
   const isOwner = community.myRole === 'owner'
 
   /**
-   * 【何のため】API を呼び、成功したら一覧を読み込み直す。
+   * 【何のため】API を呼び、成功したら、両方の枠を読み込み直してもらう。
    */
   async function run(userId: number, action: () => Promise<unknown>) {
     setBusyUserId(userId)
     setActionError(null)
     try {
       await action()
-      reload()
+      onChanged()
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : '通信中にエラーが発生しました。')
     } finally {
@@ -192,7 +228,7 @@ function MemberSection({ community, version }: { community: CommunityDetail; ver
 
   return (
     <div className={formStyles.section}>
-      <h2>メンバー</h2>
+      <h2>{setting.title}</h2>
       {actionError && (
         <p className={formStyles.formError} role="alert">
           {actionError}
@@ -203,6 +239,7 @@ function MemberSection({ community, version }: { community: CommunityDetail; ver
       {data && (
         <>
           <p className={styles.message}>{data.totalCount}人</p>
+          {data.items.length === 0 && setting.emptyMessage && <p className={styles.message}>{setting.emptyMessage}</p>}
           <ul className={styles.list}>
             {data.items.map((member) => (
               <li key={member.user.userId} className={styles.card}>
@@ -240,12 +277,26 @@ function MemberSection({ community, version }: { community: CommunityDetail; ver
           <Pagination
             page={data.page}
             totalPages={data.totalPages}
-            buildHref={(p) => pageHref(`/manage/communities/${community.id}/members`, p)}
+            buildHref={(p) => membersPageHref(community.id, searchParams, setting.pageParam, p)}
           />
         </>
       )}
     </div>
   )
+}
+
+/**
+ * 【何のため】一方の枠のページを切り替える URL を作る。もう一方の枠のページ番号は、そのまま残す。
+ */
+function membersPageHref(communityId: number, current: URLSearchParams, pageParam: string, page: number): string {
+  const params = new URLSearchParams(current)
+  if (page > 1) {
+    params.set(pageParam, String(page))
+  } else {
+    params.delete(pageParam)
+  }
+  const query = params.toString()
+  return `/manage/communities/${communityId}/members${query ? `?${query}` : ''}`
 }
 
 // 画面の対応表（src/router.tsx）から読み込めるようにする

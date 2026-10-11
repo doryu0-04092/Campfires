@@ -233,6 +233,12 @@ public class DevDataLoader implements ApplicationRunner {
                 }
             }
         }
+        // たろう（1）の申込み（トップの「参加予定のイベント」を確かめるため）：フロントエンドもくもく会のイベント 2、7、12
+        for (int index : new int[] { 1, 6, 11 }) {
+            EventSeed event = events.get(index);
+            Instant at = event.createdAt().plus(Duration.ofMinutes(20));
+            jdbc.update(sql, event.id(), 1, "applied", ts(at), ts(at));
+        }
         // 承認待ちの申込み（承認・却下を試すため）：手動のイベント 11 に、じろう（メンバー）とさくら（メンバー以外）
         EventSeed manualEvent = events.get(10);
         Instant pendingAt = manualEvent.createdAt().plus(Duration.ofMinutes(30));

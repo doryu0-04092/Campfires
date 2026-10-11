@@ -90,13 +90,17 @@ public class MemberService {
 
     /**
      * 【何のため】メンバーの一覧を返す。オーナーと運営スタッフだけ。
+     * @param groupValue managers ならオーナーと運営スタッフだけ、members なら一般のメンバーだけ。それ以外（なしを含む）は全員
      */
-    public PageResponse<MemberResponse> listMembers(long userId, long communityId, String pageValue) {
+    public PageResponse<MemberResponse> listMembers(long userId, long communityId, String pageValue,
+            String groupValue) {
         Community community = guard.requireCommunity(communityId);
         guard.requireManager(community, userId);
         int page = Paging.parsePage(pageValue);
-        long total = memberMapper.countMembers(communityId);
-        var items = memberMapper.findMembers(communityId, Paging.PAGE_SIZE, Paging.offset(page)).stream()
+        // 決まった値だけを使う（それ以外の値は、全員として扱う）
+        String group = "managers".equals(groupValue) || "members".equals(groupValue) ? groupValue : null;
+        long total = memberMapper.countMembers(communityId, group);
+        var items = memberMapper.findMembers(communityId, group, Paging.PAGE_SIZE, Paging.offset(page)).stream()
                 .map(MemberRow::toResponse)
                 .toList();
         return PageResponse.of(items, total, page);
