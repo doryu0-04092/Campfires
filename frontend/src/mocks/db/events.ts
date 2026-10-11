@@ -156,6 +156,13 @@ export function createApplications(events: MockEvent[]): MockApplication[] {
     }
   })
 
+  // たろう（1）の申込み（トップの「参加予定のイベント」を確かめるため）：フロントエンドもくもく会のイベント 2、7、12
+  for (const index of [1, 6, 11]) {
+    const event = events[index]
+    const at = new Date(new Date(event.createdAt).getTime() + 20 * 60 * 1000).toISOString()
+    applications.push({ id: applications.length + 1, eventId: event.id, userId: 1, status: 'applied', appliedAt: at, queuedAt: at })
+  }
+
   // 承認待ちの申込み（承認・却下を試すため）：手動のイベント 11 に、じろう（3、メンバー）とさくら（4、メンバー以外）
   const manualEvent = events[10]
   const pendingTime = new Date(manualEvent.createdAt).getTime() + 30 * 60 * 1000

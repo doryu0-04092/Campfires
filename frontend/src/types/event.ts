@@ -138,6 +138,22 @@ export type MyEventListResponse = {
 }
 
 /**
+ * 【何のため】管理しているイベント1件分（GET /api/me/managed-events）。
+ * 一覧の情報に、承認待ちの人数と、そのコミュニティでの自分の立場を足したもの。
+ */
+export type ManagedEvent = EventSummary & {
+  pendingCount: number
+  myRole: CommunityRole
+}
+
+/**
+ * 【何のため】管理しているイベントの一覧の返事（ページに分ける）。
+ */
+export type ManagedEventListResponse = PageInfo & {
+  items: ManagedEvent[]
+}
+
+/**
  * 【何のため】コミュニティのイベントの一覧の返事（GET /api/communities/:communityId/events）。
  */
 export type CommunityEventListResponse = PageInfo & {

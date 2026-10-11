@@ -190,6 +190,30 @@ export const eventHandlers = [
   }),
 
   /**
+   * 管理しているイベントの一覧（GET /api/me/managed-events）。
+   * 自分がオーナーか運営スタッフをしているコミュニティ（アーカイブ済みを含む）のイベント。
+   * status=upcoming（初期値）：開催前を開始日時の近い順。status=past：終了済みを開始日時の新しい順。
+   */
+  http.get('/api/me/managed-events', async ({ request, cookies }) => {
+    await delay(300)
+    const user = requireLogin(cookies)
+    if (user instanceof Response) {
+      return user
+    }
+    const isPast = new URL(request.url).searchParams.get('status') === 'past'
+    const items = db.events
+      .filter((e) => isManager(e.communityId, user.id) && isEnded(e) === isPast)
+      .sort((a, b) => (isPast ? b.startAt.localeCompare(a.startAt) : a.startAt.localeCompare(b.startAt)) || a.id - b.id)
+      .map((e) => ({
+        ...toEventSummary(db, e),
+        pendingCount: countPending(e.id),
+        // isManager で絞っているので、立場は必ず owner か staff
+        myRole: findRole(e.communityId, user.id)!,
+      }))
+    return HttpResponse.json(paginate(items, parsePage(request)))
+  }),
+
+  /**
    * イベントの一覧・検索（GET /api/events）。例：GET /api/events?q=Java+初心者&page=2
    */
   http.get('/api/events', async ({ request }) => {

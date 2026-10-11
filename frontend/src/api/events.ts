@@ -12,6 +12,7 @@ import type {
   EventDetail,
   EventInput,
   EventListResponse,
+  ManagedEventListResponse,
   MyApplication,
   MyEventListResponse,
 } from '../types/event'
@@ -109,6 +110,18 @@ export function decideApplication(communityId: number, eventId: number, userId: 
     method: 'PATCH',
     body: { status },
   })
+}
+
+/**
+ * 【何のため】自分がオーナーか運営スタッフをしているコミュニティのイベントの一覧を取得する（GET /api/me/managed-events）。
+ * 左のメニューの「イベント編集」「申込者一覧」で、どのイベントを開くかを選ぶ画面に使う。
+ */
+export function fetchManagedEvents(status: 'upcoming' | 'past', page: number, signal?: AbortSignal) {
+  const params = new URLSearchParams({ status })
+  if (page > 1) {
+    params.set('page', String(page))
+  }
+  return apiRequest<ManagedEventListResponse>(`/api/me/managed-events?${params.toString()}`, { signal })
 }
 
 /** 【何のため】自分が申し込んだ開催前のイベントの一覧を取得する（GET /api/me/events）。 */

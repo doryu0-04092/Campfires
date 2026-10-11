@@ -12,7 +12,7 @@
 // useState：部品の中で、変わる値（ここではメニューが開いているかどうか）を覚えておくための関数
 import { useState } from 'react'
 // NavLink：Link と同じく画面を移動するリンク。今開いている画面のリンクかどうかを見分けられる
-import { NavLink } from 'react-router'
+import { NavLink, useLocation } from 'react-router'
 // この部品専用の CSS
 import styles from './Sidebar.module.css'
 
@@ -24,6 +24,9 @@ type MenuItem = {
   to: string
   // メニューに表示する文字
   label: string
+  // この項目から進んだ先の画面の URL の形（正規表現）。今の URL が当てはまれば、この項目を強調する。
+  // 例：「イベント編集」は、選ぶ画面のあとに /manage/communities/1/events/5/edit を開くので、そこでも強調する
+  activeFor?: RegExp
 }
 
 /**
@@ -36,57 +39,58 @@ type MenuGroup = {
   items: MenuItem[]
 }
 
-// 「ユーザー」のまとまり。番号がなくても開ける利用者の画面を並べる
-const userItems: MenuItem[] = [
-  { to: '/', label: 'イベント一覧' },                  // S-01
-  { to: '/communities', label: 'コミュニティ一覧' },   // S-17
-]
-
-// 「コミュニティ管理」のまとまり。番号がなくても開ける管理の画面を並べる
-const manageItems: MenuItem[] = [
-  { to: '/manage/communities', label: '管理しているコミュニティ' },  // S-16
-  { to: '/manage/communities/new', label: 'コミュニティ作成' },      // S-04
-]
-
-// 開発中だけ表示する項目。番号が必要な画面を、例の番号（1番）で開けるようにする。
-// import.meta.env.DEV は、開発用のサーバー（npm run dev）のときだけ true になる値。
-// 本番用のファイル（npm run build）では false になるので、この項目は本番に含まれない。
-const devUserItems: MenuItem[] = import.meta.env.DEV
-  ? [
-      { to: '/communities/1', label: 'コミュニティ詳細' },         // S-05
-      { to: '/communities/1/events/1', label: 'イベント詳細' },    // S-09
-    ]
-  : []
-
-const devManageItems: MenuItem[] = import.meta.env.DEV
-  ? [
-      { to: '/manage/communities/1/edit', label: 'コミュニティ編集' },                   // S-06
-      { to: '/manage/communities/1/members', label: 'メンバー管理' },                    // S-07
-    ]
-  : []
-
-// 「イベント管理」のまとまり。イベントの画面は、どれもコミュニティとイベントの番号が必要なので、
-// 開発中だけ、例の番号（1番）で開けるようにする
-const devEventItems: MenuItem[] = import.meta.env.DEV
-  ? [
-      { to: '/manage/communities/1/events/new', label: 'イベント作成' },                 // S-08
-      { to: '/manage/communities/1/events/1/edit', label: 'イベント編集' },              // S-10
-      { to: '/manage/communities/1/events/1/applicants', label: '申込者一覧' },          // S-11
-    ]
-  : []
-
-// 「ユーザー」のまとまり（いつも開いている）
-// [...a, ...b] は、2つの一覧をつなげて1つにする書き方
-const userGroup: MenuGroup = { title: 'ユーザー', items: [...userItems, ...devUserItems] }
+// 「ユーザー」のまとまり（いつも開いている）。
+// コミュニティ詳細とイベント詳細は、一覧から開くので、メニューには置かない
+const userGroup: MenuGroup = {
+  title: 'ユーザー',
+  items: [
+    { to: '/', label: 'イベント一覧' },                  // S-01
+    { to: '/communities', label: 'コミュニティ一覧' },   // S-17
+  ],
+}
 
 // 管理メニュー（オーナー・運営スタッフ用）の中のまとまり。
 // 「管理者」としないのは、要件定義書で「管理者」をアプリの運営者の意味で使っているため。
-// filter で、項目が1つもないまとまり（本番の「イベント管理」）を取り除く。
-// 本番では、イベントの管理の画面へは、イベントの詳細の画面から移動する
+// どのコミュニティ・どのイベントかを決めないと開けない画面は、先に「選ぶ画面」（S-18、S-19）を開く（Issue #45）
 const manageGroups: MenuGroup[] = [
-  { title: 'コミュニティ管理', items: [...manageItems, ...devManageItems] },
-  { title: 'イベント管理', items: devEventItems },
-].filter((group) => group.items.length > 0)
+  {
+    title: 'コミュニティ管理',
+    items: [
+      { to: '/manage/communities', label: '管理しているコミュニティ' },  // S-16
+      { to: '/manage/communities/new', label: 'コミュニティ作成' },      // S-04
+      {
+        to: '/manage/select/community-edit',                                // S-18 → S-06
+        label: 'コミュニティ編集',
+        activeFor: /^\/manage\/communities\/\d+\/edit$/,
+      },
+      {
+        to: '/manage/select/members',                                       // S-18 → S-07
+        label: 'メンバー管理',
+        activeFor: /^\/manage\/communities\/\d+\/members$/,
+      },
+    ],
+  },
+  {
+    title: 'イベント管理',
+    items: [
+      {
+        to: '/manage/select/event-create',                                  // S-18 → S-08
+        label: 'イベント作成',
+        activeFor: /^\/manage\/communities\/\d+\/events\/new$/,
+      },
+      {
+        to: '/manage/select/event-edit',                                    // S-19 → S-10
+        label: 'イベント編集',
+        activeFor: /^\/manage\/communities\/\d+\/events\/\d+\/edit$/,
+      },
+      {
+        to: '/manage/select/applicants',                                    // S-19 → S-11
+        label: '申込者一覧',
+        activeFor: /^\/manage\/communities\/\d+\/events\/\d+\/applicants$/,
+      },
+    ],
+  },
+]
 
 // 管理メニューの開け閉めの状態を、ブラウザに覚えておくときの名前
 const MANAGE_MENU_KEY = 'campfires.sidebar.manageMenuOpen'
@@ -126,6 +130,8 @@ function Sidebar() {
   // isManageOpen：管理メニューが開いているかどうか。最初の値は、ブラウザに覚えておいた状態。
   // useState(関数) と書くと、最初の1回だけ、その関数で値を決める
   const [isManageOpen, setIsManageOpen] = useState(loadManageMenuOpen)
+  // 今の URL。選ぶ画面から進んだ先の画面でも、メニューの項目を強調するために使う
+  const { pathname } = useLocation()
 
   /**
    * 【何のため】管理メニューを開け閉めし、その状態をブラウザに覚えておく。
@@ -153,7 +159,9 @@ function Sidebar() {
                 // これがないと、「/」がすべての画面で一致してしまう
                 end
                 // 今開いている画面のリンクだけ、active のクラスを付けて目立たせる
-                className={({ isActive }) => (isActive ? `${styles.link} ${styles.active}` : styles.link)}
+                className={({ isActive }) =>
+                  isActive || item.activeFor?.test(pathname) ? `${styles.link} ${styles.active}` : styles.link
+                }
                 // 項目を押したら、スマートフォンのメニューを閉じる
                 onClick={() => setIsOpen(false)}
               >

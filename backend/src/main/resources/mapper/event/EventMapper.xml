@@ -108,6 +108,37 @@
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
+    <!--
+      管理しているイベント：自分がオーナーか運営スタッフをしているコミュニティ（アーカイブ済みを含む）のイベント。
+      me は「自分のメンバーの行」の別名
+    -->
+    <sql id="managedTarget">
+        FROM events e
+        JOIN communities c ON c.id = e.community_id
+        JOIN memberships me ON me.community_id = e.community_id
+        WHERE me.user_id = #{userId} AND me.role IN ('owner', 'staff')
+        <choose>
+            <when test="past">AND e.end_at &lt;= now()</when>
+            <otherwise>AND e.end_at > now()</otherwise>
+        </choose>
+    </sql>
+
+    <select id="countManaged" resultType="long">
+        SELECT count(*) <include refid="managedTarget"/>
+    </select>
+
+    <select id="findManaged" resultType="com.campfires.event.ManagedEvent">
+        SELECT <include refid="summaryColumns"/>,
+               (SELECT count(*) FROM applications a WHERE a.event_id = e.id AND a.status = 'pending') AS pending_count,
+               me.role AS my_role
+        <include refid="managedTarget"/>
+        <choose>
+            <when test="past">ORDER BY e.start_at DESC, e.id DESC</when>
+            <otherwise>ORDER BY e.start_at, e.id</otherwise>
+        </choose>
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
     <!-- 詳細に使う列（EventRow の項目）。終了と締め切りは、データベースの今の日時で判断する -->
     <sql id="selectEvent">
         SELECT e.id, e.community_id, c.name AS community_name, c.archived_at AS community_archived_at,
