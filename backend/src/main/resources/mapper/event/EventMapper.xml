@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  【役割】イベント（events テーブル）の SQL（EventMapper.java のメソッドと、id の名前で結び付く）。
+  【なぜ必要か】イベントの一覧・検索のルール（要件定義書 5.8）と、作成・編集・削除（5.2）を、SQL で行うため。
+  「開催前」は終了日時が今より後、「終了済み」は終了日時が今以前のイベント。今の日時は、データベースの now() を使う。
+-->
+<mapper namespace="com.campfires.event.EventMapper">
+
+    <!-- 申込み済み（キャンセル待ちを除く）の人数を数える部品。e はイベントの表の別名 -->
+    <sql id="appliedCount">
+        (SELECT count(*) FROM applications a WHERE a.event_id = e.id AND a.status = 'applied')
+    </sql>
+
+    <!-- 一覧に出す列（EventSummary の項目）。c はコミュニティの表の別名 -->
+    <sql id="summaryColumns">
+        e.id, e.community_id, c.name AS community_name, e.title, e.start_at, e.end_at, e.capacity,
+        e.capacity - <include refid="appliedCount"/> AS remaining_seats
+    </sql>
+
+    <!--
+      検索の単語が、タイトルと説明にいくつ含まれているかを数える部品（要件定義書 5.8）。
+      考え方は、コミュニティの検索（CommunityMapper.xml の score）と同じ
+    -->
+    <sql id="score">
+        <choose>
+            <when test="words.isEmpty()">0</when>
+            <otherwise>
+                (<foreach collection="words" item="word" separator=" + ">
+                    CASE WHEN strpos(lower(e.title || ' ' || e.description), #{word}) > 0 THEN 1 ELSE 0 END
+                </foreach>)
+            </otherwise>
+        </choose>
+    </sql>
+
+    <!--
+      検索の対象：開催前のイベント（アーカイブ中のコミュニティのイベントも含める。要件定義書 5.9）。
+      検索しているときは、1つでも単語を含むものだけ
+    -->
+    <sql id="searchTarget">
+        FROM (
+            SELECT <include refid="summaryColumns"/>, e.created_at, <include refid="score"/> AS score
+            FROM events e
+            JOIN communities c ON c.id = e.community_id
+            WHERE e.end_at > now()
+        ) s
+        <if test="!words.isEmpty()">
+            WHERE s.score > 0
+        </if>
+    </sql>
+
+    <select id="countSearch" resultType="long">
+        SELECT count(*) <include refid="searchTarget"/>
+    </select>
+
+    <!-- 当てはまった単語の数が多い順、同じなら作成日時の新しい順（さらに同じなら番号の大きい順） -->
+    <select id="search" resultType="com.campfires.event.EventSummary">
+        SELECT s.id, s.community_id, s.community_name, s.title, s.start_at, s.end_at, s.capacity, s.remaining_seats
+        <include refid="searchTarget"/>
+        ORDER BY s.score DESC, s.created_at DESC, s.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!--
+      キャンセル待ちの何番目か：同じイベントのキャンセル待ちのうち、自分より先に（または同じ日時で番号が小さく）
+      申し込んだ人の数 + 自分。(日時, 番号) &lt;= (日時, 番号) は、2つの値を順番に比べる書き方
+    -->
+    <sql id="waitlistPosition">
+        CASE WHEN my.status = 'waitlisted' THEN (
+            SELECT count(*)::int FROM applications w
+            WHERE w.event_id = my.event_id AND w.status = 'waitlisted'
+              AND (w.applied_at, w.id) &lt;= (my.applied_at, my.id)
+        ) END
+    </sql>
+
+    <select id="findMyEvents" resultType="com.campfires.event.MyEventRow">
+        SELECT <include refid="summaryColumns"/>,
+               my.status, <include refid="waitlistPosition"/> AS waitlist_position, my.applied_at
+        FROM applications my
+        JOIN events e ON e.id = my.event_id
+        JOIN communities c ON c.id = e.community_id
+        WHERE my.user_id = #{userId} AND e.end_at > now()
+        ORDER BY e.start_at, e.id
+    </select>
+
+    <!-- past が true なら終了済み、false なら開催前 -->
+    <sql id="communityEventsTarget">
+        FROM events e
+        JOIN communities c ON c.id = e.community_id
+        WHERE e.community_id = #{communityId}
+        <choose>
+            <when test="past">AND e.end_at &lt;= now()</when>
+            <otherwise>AND e.end_at > now()</otherwise>
+        </choose>
+    </sql>
+
+    <select id="countCommunityEvents" resultType="long">
+        SELECT count(*) <include refid="communityEventsTarget"/>
+    </select>
+
+    <select id="findCommunityEvents" resultType="com.campfires.event.EventSummary">
+        SELECT <include refid="summaryColumns"/>
+        <include refid="communityEventsTarget"/>
+        <choose>
+            <when test="past">ORDER BY e.start_at DESC, e.id DESC</when>
+            <otherwise>ORDER BY e.start_at, e.id</otherwise>
+        </choose>
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 詳細に使う列（EventRow の項目）。終了と締め切りは、データベースの今の日時で判断する -->
+    <sql id="selectEvent">
+        SELECT e.id, e.community_id, c.name AS community_name, c.archived_at AS community_archived_at,
+               e.title, e.description, e.start_at, e.end_at, e.application_deadline, e.location, e.capacity,
+               <include refid="appliedCount"/> AS applied_count,
+               (SELECT count(*) FROM applications a WHERE a.event_id = e.id AND a.status = 'waitlisted') AS waitlist_count,
+               e.end_at &lt;= now() AS ended,
+               e.application_deadline &lt;= now() AS deadline_passed,
+               e.created_at
+        FROM events e
+        JOIN communities c ON c.id = e.community_id
+        WHERE e.id = #{eventId} AND e.community_id = #{communityId}
+    </sql>
+
+    <select id="find" resultType="com.campfires.event.EventRow">
+        <include refid="selectEvent"/>
+    </select>
+
+    <!--
+      イベントの行だけをロックする。人数（申込み済みの数）は、ここでは数えない。
+      PostgreSQL では、ロックが空くのを待った後、ロックした行そのものの値は新しく読み直されるが、
+      同じ SQL の中で数えた人数は「待つ前の古い値」のままになる。
+      そのため、ロックを取る SQL と、人数を数える SQL（find）を分ける。
+      （1つの SQL にまとめると、100人が同時に申し込んだテストで、定員1に10人が申込み済みになった）
+    -->
+    <select id="lock" resultType="long">
+        SELECT id FROM events WHERE id = #{eventId} AND community_id = #{communityId} FOR UPDATE
+    </select>
+
+    <!-- input.title のように、渡したデータ（ValidEventInput）の項目を「.」でつないで使える -->
+    <select id="insert" resultType="long" flushCache="true">
+        INSERT INTO events (community_id, title, description, start_at, end_at, application_deadline, location, capacity)
+        VALUES (#{communityId}, #{input.title}, #{input.description}, #{input.startAt}, #{input.endAt},
+                #{input.applicationDeadline}, #{input.location}, #{input.capacity})
+        RETURNING id
+    </select>
+
+    <update id="update">
+        UPDATE events SET
+            title = #{input.title},
+            description = #{input.description},
+            start_at = #{input.startAt},
+            end_at = #{input.endAt},
+            application_deadline = #{input.applicationDeadline},
+            location = #{input.location},
+            capacity = #{input.capacity}
+        WHERE id = #{eventId}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM events WHERE id = #{eventId}
+    </delete>
+
+    <select id="now" resultType="java.time.Instant">
+        SELECT now()
+    </select>
+</mapper>

@@ -7,9 +7,8 @@ import org.apache.ibatis.annotations.Param;
 
 /**
  * 【役割】申込み（applications テーブル）の SQL の窓口。
- * 【なぜ必要か】申込みの取り消しと、キャンセル待ちの繰り上げを、SQL で行うため。
+ * 【なぜ必要か】申込み、取り消し、キャンセル待ちの繰り上げ、申込者の一覧を、SQL で行うため。
  * SQL の本文は src/main/resources/mapper/event/ApplicationMapper.xml。
- * 申込みの API（イベントの機能）を作るときに、ここへメソッドを足していく。
  */
 @Mapper
 public interface ApplicationMapper {
@@ -35,6 +34,29 @@ public interface ApplicationMapper {
      * 【何のため】申込みを削除する。
      */
     void delete(@Param("applicationId") long applicationId);
+
+    /**
+     * 【何のため】自分の申込みの状況（キャンセル待ちなら何番目か）を返す。申し込んでいなければ null。
+     */
+    MyApplication findMyApplication(@Param("eventId") long eventId, @Param("userId") long userId);
+
+    /**
+     * 【何のため】申込みを登録する。
+     * 同じイベントにすでに申し込んでいれば、データベースの制約で DuplicateKeyException が投げられる。
+     * @param status applied（申込み済み）か waitlisted（キャンセル待ち）
+     */
+    void insert(@Param("eventId") long eventId, @Param("userId") long userId, @Param("status") String status);
+
+    /**
+     * 【何のため】申込者（キャンセル待ちを含む）の数を数える。
+     */
+    long countApplications(@Param("eventId") long eventId);
+
+    /**
+     * 【何のため】申込者の1ページ分を返す。申込み済みの人を申し込んだ順、そのあとにキャンセル待ちの人を順番どおりに並べる。
+     */
+    List<ApplicationRow> findApplications(@Param("eventId") long eventId, @Param("limit") int limit,
+            @Param("offset") long offset);
 
     /**
      * 【何のため】空いている枠の数だけ、キャンセル待ちの先頭から申込み済みに繰り上げる。締め切り後は繰り上げない。

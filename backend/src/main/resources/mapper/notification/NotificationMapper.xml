@@ -20,4 +20,16 @@
           AND m.role IN ('owner', 'staff')
           AND m.user_id &lt;&gt; #{operatorUserId}
     </insert>
+
+    <!--
+      申し込んでいた人の人数分、お知らせを作る。イベントは削除されるので、event_id は入れない（NULL）
+    -->
+    <insert id="insertEventDeleted">
+        INSERT INTO notifications (user_id, type, event_title, community_id, event_id, actor_user_id)
+        SELECT a.user_id, 'event_deleted', e.title, e.community_id, NULL, NULL
+        FROM events e
+        JOIN applications a ON a.event_id = e.id
+        WHERE e.id = #{eventId}
+          AND a.user_id &lt;&gt; #{operatorUserId}
+    </insert>
 </mapper>

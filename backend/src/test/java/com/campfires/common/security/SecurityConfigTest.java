@@ -73,7 +73,7 @@ class SecurityConfigTest {
     void 存在しないURLは404() throws Exception {
         mockMvc.perform(get("/api/communities/1/unknown/path"))
                 .andExpect(status().isUnauthorized());
-        mockMvc.perform(get("/api/communities/1/events/1"))
+        mockMvc.perform(get("/api/communities/999999999/events/999999999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
