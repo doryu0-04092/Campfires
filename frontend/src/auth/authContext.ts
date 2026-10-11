@@ -10,7 +10,7 @@
  */
 
 import { createContext } from 'react'
-import type { LoginRequest, Me } from '../types/account'
+import type { DeleteMeRequest, LoginRequest, Me, SignupRequest, UpdateMeRequest } from '../types/account'
 
 /**
  * 【何のため】ログイン状態の形。次の3つのどれか。
@@ -33,6 +33,12 @@ export type AuthContextValue = {
   login: (request: LoginRequest) => Promise<void>
   // ログアウトする
   logout: () => Promise<void>
+  // アカウントを登録する。成功したら、ログインした状態になる。失敗したときは ApiError を投げる
+  signup: (request: SignupRequest) => Promise<void>
+  // ニックネームを変更する。失敗したときは ApiError を投げる
+  updateMe: (request: UpdateMeRequest) => Promise<void>
+  // アカウントを削除する。成功したら、ログインしていない状態になる。失敗したときは ApiError を投げる
+  deleteAccount: (request: DeleteMeRequest) => Promise<void>
 }
 
 // ログイン状態の入れ物。最初の値は null（AuthProvider の外では使えない、という意味）

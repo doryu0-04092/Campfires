@@ -1,0 +1,39 @@
+/*
+ * 【役割】文章を読ませる画面（プライバシーポリシー、利用規約）で共通に使う見た目。
+ * 【なぜ必要か】長い文章を読みやすくするため（1行の長さ、見出しの間隔をそろえる）。
+ */
+
+/* 文章全体：1行が長くなりすぎないように、幅を決める */
+.document {
+  max-width: 720px;
+  line-height: 1.8;
+}
+
+/* 章の見出し：上に余白を取り、章の区切りを分かりやすくする */
+.document h2 {
+  margin-top: 32px;
+  font-size: 18px;
+  border-bottom: 1px solid #e8dfd6;
+  padding-bottom: 4px;
+}
+
+/* 箇条書き */
+.document ul,
+.document ol {
+  padding-left: 24px;
+}
+
+/* ひな形であることの注意書き：目立つように枠で囲む */
+.notice {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #fff4e6;
+  font-size: 14px;
+}
+
+/* 制定日・改定日 */
+.dates {
+  margin-top: 32px;
+  color: var(--text-muted);
+  font-size: 14px;
+}

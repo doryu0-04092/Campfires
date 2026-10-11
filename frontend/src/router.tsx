@@ -8,6 +8,8 @@
 import { createBrowserRouter } from 'react-router'
 // すべての画面に共通する枠（画面上部のメニューと、画面下部のリンク）
 import Layout from './components/Layout'
+// ログインが必要な画面を守る部品
+import RequireAuth from './components/RequireAuth'
 // 各画面。docs/screens.md のまとまり（利用者・管理・共通）ごとに並べている
 // 利用者の画面
 import EventListPage from './pages/EventListPage'
@@ -49,29 +51,38 @@ export const router = createBrowserRouter([
       { path: 'communities', Component: CommunityListPage },                             // S-17
       { path: 'communities/:communityId', Component: CommunityDetailPage },              // S-05
       { path: 'communities/:communityId/events/:eventId', Component: EventDetailPage },  // S-09
-      { path: 'account', Component: AccountSettingsPage },                               // S-12
 
-      // ---------- 管理の画面（URL は /manage で始まる） ----------
+      // ---------- ログインが必要な画面 ----------
+      // path を書かずに Component だけを書くと、URL は変えずに、子の画面を RequireAuth で包める。
+      // ログインしていない人が来たら、RequireAuth がログインの画面へ移動させる
       {
-        // path: 'manage' の下に children を書くと、子の URL の頭に「manage/」が付く。
-        // 例：子の 'communities' は、/manage/communities になる
-        path: 'manage',
+        Component: RequireAuth,
         children: [
-          { path: 'communities', Component: ManagedCommunityListPage },                      // S-16
-          // 「new」は「:communityId」より前に書いておく。/manage/communities/new を作成画面として扱うため
-          { path: 'communities/new', Component: CommunityCreatePage },                       // S-04
-          { path: 'communities/:communityId/edit', Component: CommunityEditPage },           // S-06
-          { path: 'communities/:communityId/members', Component: MemberManagementPage },     // S-07
-          { path: 'communities/:communityId/events/new', Component: EventCreatePage },       // S-08
-          { path: 'communities/:communityId/events/:eventId/edit', Component: EventEditPage },            // S-10
-          { path: 'communities/:communityId/events/:eventId/applicants', Component: ApplicantListPage },  // S-11
+          { path: 'account', Component: AccountSettingsPage },        // S-12
+          { path: 'notifications', Component: NotificationListPage }, // S-15
+
+          // ---------- 管理の画面（URL は /manage で始まる） ----------
+          {
+            // path: 'manage' の下に children を書くと、子の URL の頭に「manage/」が付く。
+            // 例：子の 'communities' は、/manage/communities になる
+            path: 'manage',
+            children: [
+              { path: 'communities', Component: ManagedCommunityListPage },                      // S-16
+              // 「new」は「:communityId」より前に書いておく。/manage/communities/new を作成画面として扱うため
+              { path: 'communities/new', Component: CommunityCreatePage },                       // S-04
+              { path: 'communities/:communityId/edit', Component: CommunityEditPage },           // S-06
+              { path: 'communities/:communityId/members', Component: MemberManagementPage },     // S-07
+              { path: 'communities/:communityId/events/new', Component: EventCreatePage },       // S-08
+              { path: 'communities/:communityId/events/:eventId/edit', Component: EventEditPage },            // S-10
+              { path: 'communities/:communityId/events/:eventId/applicants', Component: ApplicantListPage },  // S-11
+            ],
+          },
         ],
       },
 
       // ---------- 共通の画面 ----------
       { path: 'signup', Component: SignupPage },                  // S-02
       { path: 'login', Component: LoginPage },                    // S-03
-      { path: 'notifications', Component: NotificationListPage }, // S-15
       { path: 'privacy', Component: PrivacyPolicyPage },          // S-13
       { path: 'terms', Component: TermsPage },                    // S-14
       // 「*」は「上のどれにも当てはまらない URL」という意味

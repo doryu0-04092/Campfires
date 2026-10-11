@@ -4,7 +4,7 @@
  * URL と返事の形は、API 仕様書（docs/api/openapi.yaml）の auth と account に合わせている。
  */
 
-import type { LoginRequest, Me } from '../types/account'
+import type { DeleteMeRequest, LoginRequest, Me, SignupRequest, UpdateMeRequest } from '../types/account'
 import { ApiError, apiRequest } from './client'
 
 /**
@@ -46,4 +46,27 @@ export async function login(request: LoginRequest): Promise<Me> {
  */
 export async function logout(): Promise<void> {
   await apiRequest<void>('/api/auth/logout', { method: 'POST' })
+}
+
+/**
+ * 【何のため】アカウントを登録する（POST /api/auth/signup）。成功したら、そのままログインした状態になり、自分の情報を返す。
+ * 失敗したときは ApiError を投げる（code は VALIDATION_ERROR、EMAIL_ALREADY_REGISTERED）。
+ */
+export async function signup(request: SignupRequest): Promise<Me> {
+  return apiRequest<Me>('/api/auth/signup', { method: 'POST', body: request })
+}
+
+/**
+ * 【何のため】ニックネームを変更する（PATCH /api/me）。成功したら、変更後の自分の情報を返す。
+ */
+export async function updateMe(request: UpdateMeRequest): Promise<Me> {
+  return apiRequest<Me>('/api/me', { method: 'PATCH', body: request })
+}
+
+/**
+ * 【何のため】アカウントを削除する（DELETE /api/me）。
+ * 失敗したときは ApiError を投げる（code は INVALID_PASSWORD、OWNS_ACTIVE_COMMUNITIES など）。
+ */
+export async function deleteMe(request: DeleteMeRequest): Promise<void> {
+  await apiRequest<void>('/api/me', { method: 'DELETE', body: request })
 }
