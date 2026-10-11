@@ -12,3 +12,10 @@ import { eventHandlers } from './events'
 
 // ... は「一覧の中身を、ここに並べる」という書き方。分野ごとの一覧をつなげて1つにしている
 export const handlers = [...authHandlers, ...accountHandlers, ...communityHandlers, ...eventHandlers]
+
+// 開発中に偽の API のファイルを書き換えたときは、ページ全体を読み込み直す。
+// 偽の API はページを開いたときに1回だけ準備されるので、読み込み直さないと、古い一覧のまま動いてしまうため。
+// import.meta.hot は、開発用サーバー（npm run dev）のときだけある仕組みで、本番では何もしない
+if (import.meta.hot) {
+  import.meta.hot.accept(() => window.location.reload())
+}
