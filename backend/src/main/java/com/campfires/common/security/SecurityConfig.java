@@ -7,8 +7,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.header.HeaderWriterFilter;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -80,7 +82,17 @@ public class SecurityConfig {
                         // 別のサイトへ移動するとき、こちらの URL の細かい部分（パス）を送らない
                         .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                         // カメラ、マイク、位置情報などのブラウザの機能を、このサイトでは使わせない
-                        .permissionsPolicyHeader(permissions -> permissions.policy("camera=(), microphone=(), geolocation=()")))
+                        .permissionsPolicyHeader(permissions -> permissions.policy("camera=(), microphone=(), geolocation=()"))
+                        // ヘッダーを、処理の前に書く（eagerly）。ふだんは、返事を送り出す瞬間に書くが、HEAD のリクエスト
+                        // （中身なしで、ヘッダーだけを返す）では、その瞬間を通らずに送り出され、ヘッダーが付かなかった（E2E で発見）。
+                        // addObjectPostProcessor は「Spring Security が作った部品（ここではヘッダーを書くフィルター）の設定を、あとから変える」書き方
+                        .addObjectPostProcessor(new ObjectPostProcessor<HeaderWriterFilter>() {
+                            @Override
+                            public <O extends HeaderWriterFilter> O postProcess(O filter) {
+                                filter.setShouldWriteHeadersEagerly(true);
+                                return filter;
+                            }
+                        }))
                 // HSTS（「このサイトは HTTPS だけで開く」とブラウザに覚えさせる）は、Spring Security が
                 // HTTPS の通信のときに自動で付ける（本番では、ロードバランサーの HTTPS を、server.forward-headers-strategy で正しく扱う）
 

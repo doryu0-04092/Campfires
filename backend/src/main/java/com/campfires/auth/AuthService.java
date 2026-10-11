@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,9 +24,15 @@ import com.campfires.common.web.ApiException;
 @Service
 public class AuthService {
 
+    // ログイン・登録の出来事を、ログに残す（不正なログインの試みを、あとから調べられるようにするため）。
+    // メールアドレスとパスワードは、ログに出さない（個人の情報と秘密の値を、ログに広げないため）
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     // ログインの試行制限：5回続けて失敗したら、15分間ロックする（非機能要件 3章）
     static final int MAX_LOGIN_FAILURES = 5;
     static final int LOCK_MINUTES = 15;
+    // メールアドレスの長さの上限（SignupRequest と、データベースの列の長さと同じ）
+    static final int MAX_EMAIL_LENGTH = 254;
 
     // 今のプライバシーポリシーと利用規約のバージョン（制定日）。文章を変えたら、ここも変える
     static final String POLICIES_VERSION = "2026-10-11";
@@ -53,8 +61,10 @@ public class AuthService {
             throw emailAlreadyRegistered();
         }
         try {
-            return userMapper.insert(request.realName(), request.nickname(), request.email(),
+            User user = userMapper.insert(request.realName(), request.nickname(), request.email(),
                     passwordEncoder.encode(request.password()), POLICIES_VERSION);
+            log.atInfo().addKeyValue("event", "signup").addKeyValue("userId", user.id()).log("アカウントを登録しました");
+            return user;
         } catch (DuplicateKeyException e) {
             // 確かめた直後に、ほかの人が同じメールアドレスで登録したとき（データベースの制約で止まる）
             throw emailAlreadyRegistered();
@@ -71,9 +81,18 @@ public class AuthService {
         // メールアドレスは、大文字と小文字を区別せずに扱う。Locale.ROOT は「言語によらない変換」
         String key = request.email().toLowerCase(Locale.ROOT);
 
+        // 254文字を超えるメールアドレスは、登録できない（SignupRequest）ので、そのアカウントは必ずない。
+        // 失敗の記録の列（254文字まで）に入らないので記録はせず、ほかの失敗と同じ時間をかけて、同じ返事（401）にする
+        if (key.length() > MAX_EMAIL_LENGTH) {
+            passwordEncoder.matches(request.password(), dummyPasswordHash);
+            log.atWarn().addKeyValue("event", "login_failed").log("ログインに失敗しました");
+            throw invalidCredentials();
+        }
+
         // ロック中なら 429。あと何秒で試せるかを Retry-After のヘッダーで返す
         LoginLock lock = loginFailureMapper.findLock(key);
         if (lock != null && lock.locked()) {
+            log.atWarn().addKeyValue("event", "login_locked").log("ロック中のアカウントに、ログインが試されました");
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "ACCOUNT_LOCKED",
                     "ログインに続けて失敗したため、しばらくログインできません。15分ほど待ってから、もう一度お試しください。",
                     List.of(), Map.of("Retry-After", String.valueOf(lock.retryAfterSeconds())));
@@ -86,13 +105,25 @@ public class AuthService {
                 user != null ? user.passwordHash() : dummyPasswordHash);
         if (user == null || !matches) {
             loginFailureMapper.recordFailure(key, MAX_LOGIN_FAILURES, LOCK_MINUTES);
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS",
-                    "メールアドレスまたはパスワードが正しくありません。");
+            // 登録されているアカウントなら、その番号も残す（だれのアカウントが狙われているかを調べるため）
+            var failure = log.atWarn().addKeyValue("event", "login_failed");
+            if (user != null) {
+                failure = failure.addKeyValue("userId", user.id());
+            }
+            failure.log("ログインに失敗しました");
+            throw invalidCredentials();
         }
 
         // 成功したら、失敗の記録を消す
         loginFailureMapper.clear(key);
+        log.atInfo().addKeyValue("event", "login").addKeyValue("userId", user.id()).log("ログインしました");
         return user;
+    }
+
+    // どちらが違うかは教えない（登録されているメールアドレスを探られないようにするため）
+    private static ApiException invalidCredentials() {
+        return new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS",
+                "メールアドレスまたはパスワードが正しくありません。");
     }
 
     private static ApiException emailAlreadyRegistered() {

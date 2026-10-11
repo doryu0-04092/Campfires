@@ -10,6 +10,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.campfires.account.User;
 import com.campfires.account.UserMapper;
+import com.campfires.common.observability.AccessLogFilter;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -48,6 +49,9 @@ public class ActiveUserFilter extends OncePerRequestFilter {
             if (user == null || user.deletedAt() != null) {
                 new SecurityContextLogoutHandler().logout(request, response, authentication);
                 new CookieClearingLogoutHandler("JSESSIONID").logout(request, response, authentication);
+            } else {
+                // アクセスログ（AccessLogFilter）に、だれの操作かを残すため、ログインしている人の番号を渡す
+                request.setAttribute(AccessLogFilter.USER_ID_ATTRIBUTE, loginUser.id());
             }
         }
         chain.doFilter(request, response);

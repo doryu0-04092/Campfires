@@ -31,8 +31,8 @@ function AccountSettingsPage() {
     <section className={formStyles.container}>
       <h1>アカウント設定</h1>
       <Profile me={state.me} />
-      {/* key に今のニックネームを渡すと、ニックネームが変わったときに入力欄が新しい値で作り直される */}
-      <NicknameForm key={state.me.nickname} currentNickname={state.me.nickname} />
+      {/* key は付けない（付けると、変更に成功したときにフォームが作り直され、「変更しました」の知らせが消えてしまうため） */}
+      <NicknameForm currentNickname={state.me.nickname} />
       <DeleteAccount />
     </section>
   )
@@ -155,9 +155,8 @@ function DeleteAccount() {
     setShowManageLink(false)
 
     try {
-      await deleteAccount({ password })
-      // 削除に成功したら、ログインしていない状態でトップの画面へ移動する
-      navigate('/', { replace: true })
+      // 削除に成功したら、トップの画面へ移動してから、ログインしていない状態にする（AuthProvider の becomeGuest）
+      await deleteAccount({ password }, () => navigate('/', { replace: true }))
     } catch (e) {
       if (!(e instanceof ApiError)) {
         setFormError('通信中にエラーが発生しました。時間をおいて、もう一度お試しください。')

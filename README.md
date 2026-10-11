@@ -7,7 +7,9 @@
 |---|---|---|
 | `frontend` | 画面（React、TypeScript、Vite） | [frontend/README.md](frontend/README.md) |
 | `backend` | API（Java、Spring Boot、MyBatis、PostgreSQL） | [backend/README.md](backend/README.md) |
-| `docs` | 要件定義書、画面一覧、API 仕様書など | |
+| `docs` | 要件定義書、画面一覧、API 仕様書、セキュリティ、オブザーバビリティなど | |
+| `e2e` | E2E テスト（Playwright。API だけのテストと、ブラウザのテスト） | [e2e/README.md](e2e/README.md) |
+| `infra` | AWS の構成（Terraform） | [infra/README.md](infra/README.md) |
 
 ## 動かし方
 
@@ -54,7 +56,7 @@ docker network create campfires-prod
 docker run -d --name campfires-db --network campfires-prod \
   -e POSTGRES_DB=campfires -e POSTGRES_USER=campfires -e POSTGRES_PASSWORD=change-me postgres:17
 docker run -d --name campfires-app --network campfires-prod -p 8081:8080 \
-  -e DB_HOST=campfires-db -e DB_USERNAME=campfires -e DB_PASSWORD=change-me campfires
+  -e DB_HOST=campfires-db -e DB_USERNAME=campfires -e DB_PASSWORD=change-me -e DB_SSL_MODE=disable campfires
 ```
 
 http://localhost:8081 を開きます。本番の設定では、開発用のデータは入らないので、アカウント登録から始めます。
@@ -65,7 +67,9 @@ http://localhost:8081 を開きます。本番の設定では、開発用のデ�
 | `DB_PORT` | データベースの入口の番号 | `5432`（省略したとき） |
 | `DB_NAME` | データベースの名前 | `campfires`（省略したとき） |
 | `DB_USERNAME`、`DB_PASSWORD` | データベースの利用者とパスワード（必須） | |
+| `DB_SSL_MODE` | データベースとの通信の暗号化と、証明書の確かめ方。手元の PostgreSQL（暗号化なし）につなぐときは `disable` | `verify-full`（省略したとき。AWS の RDS 用） |
 | `CAMPFIRES_RATE_LIMIT_ENABLED` | ログイン・アカウント登録の回数制限を使うか | `true`（省略したとき） |
+| `OTEL_TRACES_EXPORTER` など | トレースの送り先（[docs/observability.md](docs/observability.md)） | `none`（省略したとき。送らない） |
 
 本番の設定で、開発中と違うところ
 
@@ -73,3 +77,6 @@ http://localhost:8081 を開きます。本番の設定では、開発用のデ�
 - ログイン・アカウント登録の回数を、IP アドレスごとに制限する（ログインは10分間に20回、アカウント登録は1時間に10回まで）
 - ロードバランサーが付けるヘッダーを読み、HTTPS で来たことと、利用者の本当の IP アドレスを正しく扱う
 - 死活監視の URL：`/api/health`（データベースにつながらなければ 503）
+- ログを JSON で出し、API の呼び出しごとに1行のアクセスログを残す（[docs/observability.md](docs/observability.md)）
+
+この箱に対して、E2E テストを動かせます（[e2e/README.md](e2e/README.md)）。

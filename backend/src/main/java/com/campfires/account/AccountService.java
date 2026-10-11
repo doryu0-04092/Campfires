@@ -1,5 +1,7 @@
 package com.campfires.account;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +15,9 @@ import com.campfires.event.ApplicationCancelService;
  */
 @Service
 public class AccountService {
+
+    // アカウントの削除を、ログに残す（あとから、いつ削除されたかを調べられるようにするため）
+    private static final Logger log = LoggerFactory.getLogger(AccountService.class);
 
     private final UserMapper userMapper;
     private final AccountMapper accountMapper;
@@ -79,6 +84,7 @@ public class AccountService {
         applicationCancelService.cancelUpcomingApplications(userId, userId, null);
         // 個人情報を消し、行だけを残す（過去の申込みの記録に「退会したユーザー」と表示するため）
         userMapper.markDeleted(userId);
+        log.atInfo().addKeyValue("event", "account_deleted").addKeyValue("userId", userId).log("アカウントを削除しました");
     }
 
     // ユーザーがいない、または削除済みなら、ログインしていないものとして 401 を返す

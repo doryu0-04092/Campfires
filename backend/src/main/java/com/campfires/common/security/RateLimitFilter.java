@@ -6,6 +6,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
@@ -47,6 +49,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     static final Rule LOGIN = new Rule("/api/auth/login", 20, 600);
     static final Rule SIGNUP = new Rule("/api/auth/signup", 10, 3600);
 
+    // 回数制限で断ったことを、ログに残す（攻撃を受けていないかを、あとから調べるため）
+    private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
+
     private final boolean enabled;
     private final ProblemResponseWriter problemWriter;
     // 「決まり・IP アドレス・区切りの番号」→ 回数。ConcurrentHashMap は、同時に読み書きしても壊れない入れ物
@@ -80,6 +85,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             if (count > rule.maxRequests()) {
                 // あと何秒で、次の区切り（数え直し）になるか
                 long retryAfter = (window + 1) * rule.windowSec() - nowSec;
+                log.atWarn().addKeyValue("event", "rate_limited").addKeyValue("path", rule.path())
+                        .addKeyValue("clientIp", request.getRemoteAddr()).log("回数制限を超えたので断りました");
                 response.setHeader("Retry-After", String.valueOf(retryAfter));
                 problemWriter.write(response, HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED",
                         "短い時間に、何度も試されています。しばらく待ってから、もう一度お試しください。");

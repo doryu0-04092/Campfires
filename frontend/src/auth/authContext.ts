@@ -31,14 +31,15 @@ export type AuthContextValue = {
   state: AuthState
   // ログインする。失敗したときは ApiError を投げる
   login: (request: LoginRequest) => Promise<void>
-  // ログアウトする
-  logout: () => Promise<void>
+  // ログアウトする。beforeGuest を渡すと、ログインしていない状態にする直前に呼ぶ（画面の移動に使う。AuthProvider の becomeGuest）
+  logout: (beforeGuest?: () => void | Promise<void>) => Promise<void>
   // アカウントを登録する。成功したら、ログインした状態になる。失敗したときは ApiError を投げる
   signup: (request: SignupRequest) => Promise<void>
   // ニックネームを変更する。失敗したときは ApiError を投げる
   updateMe: (request: UpdateMeRequest) => Promise<void>
-  // アカウントを削除する。成功したら、ログインしていない状態になる。失敗したときは ApiError を投げる
-  deleteAccount: (request: DeleteMeRequest) => Promise<void>
+  // アカウントを削除する。成功したら、ログインしていない状態になる。失敗したときは ApiError を投げる。
+  // beforeGuest は logout と同じ
+  deleteAccount: (request: DeleteMeRequest, beforeGuest?: () => void | Promise<void>) => Promise<void>
 }
 
 // ログイン状態の入れ物。最初の値は null（AuthProvider の外では使えない、という意味）

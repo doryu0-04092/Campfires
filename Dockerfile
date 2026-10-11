@@ -51,6 +51,10 @@ RUN addgroup -S campfires && adduser -S -u 10001 -G campfires campfires
 # データベース（AWS の RDS）の証明書を確かめるための、AWS の公開の CA 証明書
 # （application-prod.properties の sslmode=verify-full で使う）
 ADD --chmod=444 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /app/rds-ca.pem
+# トレースの部品（AWS Distro for OpenTelemetry の Java エージェント）。アプリのコードを変えずに、
+# 「リクエストが、API とデータベースのどこで、どれだけ時間を使ったか」を記録し、AWS X-Ray に送る（docs/observability.md）。
+# 版を決め（2.31.0）、Maven Central が公開しているファイルの指紋（SHA-256）と一致しなければ、作るのを止める（すり替えの対策）
+ADD --checksum=sha256:5cc39bee10a0a3f652333f55378e37aa5f8f6319df97bcd762b41d217bb31709 --chmod=444   https://repo1.maven.org/maven2/software/amazon/opentelemetry/aws-opentelemetry-agent/2.31.0/aws-opentelemetry-agent-2.31.0.jar   /app/aws-opentelemetry-agent.jar
 COPY --from=backend /app/backend/target/*.jar app.jar
 USER campfires
 # 箱の中から、アプリが動いているかを確かめる（Docker の死活確認。AWS ではロードバランサーも確かめる）
@@ -58,7 +62,11 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD wget -q -O /dev/null http://localhost:8080/api/health || exit 1
 # 本番の設定（application-prod.properties）を使う
 ENV SPRING_PROFILES_ACTIVE=prod
+# トレースの部品の設定。ふだんは、どこにも送らない（none）。送り先は、動かす場所の環境変数で決める
+# （AWS では infra/ecs.tf で X-Ray を、手元では Jaeger を指定する。docs/observability.md）。
+# 送らないときも、ログにはトレースの番号（trace_id）が入る
+ENV OTEL_SERVICE_NAME=campfires     OTEL_TRACES_EXPORTER=none     OTEL_METRICS_EXPORTER=none     OTEL_LOGS_EXPORTER=none
 # アプリが使う入口の番号
 EXPOSE 8080
-# 箱のメモリの 75% までを、Java が使えるようにする
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
+# 箱のメモリの 75% までを、Java が使えるようにする。-javaagent で、トレースの部品を、アプリより先に読み込む
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-javaagent:/app/aws-opentelemetry-agent.jar", "-jar", "app.jar"]

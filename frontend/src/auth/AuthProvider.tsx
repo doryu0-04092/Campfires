@@ -5,7 +5,8 @@
  * src/main.tsx で、アプリ全体をこの部品で包んでいる。
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+// startTransition：画面の更新を「急がない更新」としてまとめる（becomeGuest で使う）
+import { startTransition, useEffect, useState, type ReactNode } from 'react'
 import * as authApi from '../api/auth'
 import type { DeleteMeRequest, LoginRequest, SignupRequest, UpdateMeRequest } from '../types/account'
 import { AuthContext, type AuthState } from './authContext'
@@ -65,10 +66,10 @@ function AuthProvider({ children }: AuthProviderProps) {
   /**
    * 【何のため】ログアウトする。ログイン状態を「ログインしていない」にする。
    */
-  async function logout() {
+  async function logout(beforeGuest?: () => void | Promise<void>) {
     await authApi.logout()
     await authApi.fetchCsrfToken()
-    setState({ status: 'guest' })
+    becomeGuest(beforeGuest)
   }
 
   /**
@@ -91,10 +92,26 @@ function AuthProvider({ children }: AuthProviderProps) {
   /**
    * 【何のため】アカウントを削除する。成功したら、ログインしていない状態にする。
    */
-  async function deleteAccount(request: DeleteMeRequest) {
+  async function deleteAccount(request: DeleteMeRequest, beforeGuest?: () => void | Promise<void>) {
     await authApi.deleteMe(request)
     await authApi.fetchCsrfToken()
-    setState({ status: 'guest' })
+    becomeGuest(beforeGuest)
+  }
+
+  /**
+   * 【何のため】ログインしていない状態にする。beforeGuest（画面の移動）があれば、移動と同時に、状態を変える。
+   * ログインが必要な画面（アカウント設定など）にいるときに、状態だけが先に変わると、RequireAuth がログインの画面へ
+   * 移動させてしまい、行きたい画面へ行けない。React Router は、画面の移動を「急がない更新（transition）」として行うので、
+   * 状態の変更も startTransition の中で行い、同じ「急がない更新」にまとめる。React は、まとめた更新を1回で画面に反映するので、
+   * 「行きたい画面」と「ログインしていない状態」が同時に反映され、RequireAuth は働かない。
+   * （AuthProvider は、画面の移動の仕組み（RouterProvider）の外にあるので、移動の指示は、呼ぶ側から受け取る）
+   */
+  function becomeGuest(beforeGuest?: () => void | Promise<void>) {
+    startTransition(() => {
+      // ?.() は「あれば呼ぶ」という書き方。移動の Promise は待たない（待つと、まとめた更新から外れてしまう）
+      void beforeGuest?.()
+      setState({ status: 'guest' })
+    })
   }
 
   return (

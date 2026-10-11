@@ -93,8 +93,8 @@ function HeaderMenu({ unreadCount }: { unreadCount: number }) {
   async function handleLogout() {
     setIsLoggingOut(true)
     try {
-      await logout()
-      navigate('/')
+      // ログアウトしたら、トップの画面へ移動してから、ログインしていない状態にする（AuthProvider の becomeGuest）
+      await logout(() => navigate('/'))
     } catch {
       // 失敗しても画面は壊さず、ボタンを押せる状態に戻す（もう一度押してもらう）
     } finally {

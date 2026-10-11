@@ -1,0 +1,30 @@
+# 【役割】Trivy（脆弱性の検査の道具）で、確かめたうえで受け入れた脆弱性の一覧。
+# 【なぜ必要か】受け入れた理由と、見直す期限を残すため。期限（expired_at）を過ぎると、Trivy は、また指摘する
+# （直った版が出ていないかを、見直すきっかけにする）。詳しくは docs/security.md の「受け入れたリスク」。
+#
+# 対象は、トレースの部品（aws-opentelemetry-agent.jar）の中の Jackson 2.22.2 だけ（paths で絞る）。
+# アプリが使う Jackson（3.1.7 / 2.21.7）は、指摘なし。
+# この Jackson は、部品の中の閉じた場所（inst/）にあり、部品の設定と、AWS からの返事を読むときにだけ使う。
+# 利用者が送ってきたデータは、この Jackson では読まない（アプリの Jackson が読む）。
+# 2026年10月の時点で、最新の部品（2.31.0）でも 2.22.2 のまま。直った版の部品が出たら、Dockerfile の版を上げて、ここから消す。
+vulnerabilities:
+  - id: CVE-2026-89407
+    paths:
+      - "app/aws-opentelemetry-agent.jar"
+    statement: "ADOT Java エージェントの内部の Jackson。利用者の入力は届かない（docs/security.md）"
+    expired_at: 2026-12-31
+  - id: CVE-2026-89425
+    paths:
+      - "app/aws-opentelemetry-agent.jar"
+    statement: "ADOT Java エージェントの内部の Jackson。利用者の入力は届かない（docs/security.md）"
+    expired_at: 2026-12-31
+  - id: CVE-2026-91776
+    paths:
+      - "app/aws-opentelemetry-agent.jar"
+    statement: "ADOT Java エージェントの内部の Jackson。利用者の入力は届かない（docs/security.md）"
+    expired_at: 2026-12-31
+  - id: CVE-2026-91777
+    paths:
+      - "app/aws-opentelemetry-agent.jar"
+    statement: "ADOT Java エージェントの内部の Jackson。利用者の入力は届かない（docs/security.md）"
+    expired_at: 2026-12-31
