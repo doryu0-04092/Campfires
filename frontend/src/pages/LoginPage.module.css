@@ -1,0 +1,84 @@
+/*
+ * 【役割】ログインの画面（LoginPage.tsx）専用の見た目。
+ */
+
+/* 画面全体：入力欄が横に広がりすぎないように、幅を決める */
+.container {
+  max-width: 420px;
+}
+
+/* 入力欄を縦に並べる */
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+/* 入力欄1つ分：項目名、入力欄、エラーの文を縦に並べる */
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+/* 入力欄 */
+.field input {
+  padding: 8px 12px;
+  border: 1px solid #d6cbc1;
+  border-radius: 6px;
+  font: inherit;
+}
+
+/* エラーがある入力欄：枠を赤くする */
+.field input[aria-invalid='true'] {
+  border-color: #c92a2a;
+}
+
+/* 入力欄ごとのエラーの文 */
+.fieldError {
+  margin: 0;
+  color: #c92a2a;
+  font-size: 14px;
+}
+
+/* 画面の上に出すエラーの文 */
+.formError {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #fff5f5;
+  color: #c92a2a;
+}
+
+/* ログインのボタン */
+.submit {
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* 送信中のボタン：薄くする */
+.submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 補足の文 */
+.note {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* 開発用のアカウントの一覧：本番の画面と区別できるように、点線で囲む */
+.devAccounts {
+  margin-top: 24px;
+  padding: 8px 16px;
+  border: 1px dashed #d6cbc1;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.devAccounts h2 {
+  font-size: 14px;
+}

@@ -10,6 +10,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 // ルーター（URL に合わせて画面を切り替える仕組み）を画面に組み込むための部品
 import { RouterProvider } from 'react-router'
+// ログイン状態を管理し、画面全体に配る部品
+import AuthProvider from './auth/AuthProvider'
 // アプリ全体に効く CSS を読み込む
 import './index.css'
 // URL と画面の対応表から作ったルーター
@@ -42,8 +44,11 @@ enableMocking().then(() => {
   createRoot(document.getElementById('root')!).render(
     // StrictMode：開発中だけ、よくある書き間違いを警告してくれる。本番の動作には影響しない
     <StrictMode>
-      {/* RouterProvider：今の URL を見て、対応表のとおりに画面を表示する */}
-      <RouterProvider router={router} />
+      {/* AuthProvider：中のすべての画面で、ログイン状態を使えるようにする */}
+      <AuthProvider>
+        {/* RouterProvider：今の URL を見て、対応表のとおりに画面を表示する */}
+        <RouterProvider router={router} />
+      </AuthProvider>
     </StrictMode>,
   )
 })

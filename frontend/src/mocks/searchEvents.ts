@@ -6,7 +6,8 @@
  */
 
 import type { EventListResponse, EventSummary } from '../types/event'
-import type { MockEvent } from './data/events'
+import type { MockDb } from './db'
+import type { MockEvent } from './db/events'
 
 // 検索のルールで決めた数値。要件定義書 5.8 と同じにしている
 export const PAGE_SIZE = 30          // 1ページの件数
@@ -47,37 +48,41 @@ export function countMatchedWords(event: MockEvent, words: string[]): number {
 
 /**
  * 【何のため】偽のデータベースのイベント（MockEvent）を、画面に返す形（EventSummary）に変える。
+ * コミュニティの名前と残りの枠数は、ほかの表（コミュニティ、申込み）から求める。
+ * 本物のバックエンドでは、SQL で表をつなぎ合わせて（JOIN）求めることになる。
  * 説明など、一覧で使わない項目はここで取り除く。
  */
-function toSummary(event: MockEvent): EventSummary {
+export function toEventSummary(db: MockDb, event: MockEvent): EventSummary {
+  // イベントが属するコミュニティを探す。! は「必ず見つかる」と TypeScript に伝える書き方
+  const community = db.communities.find((c) => c.id === event.communityId)!
+  // 申込み済み（キャンセル待ちを除く）の人数を数える
+  const appliedCount = db.applications.filter(
+    (application) => application.eventId === event.id && application.status === 'applied',
+  ).length
+
   return {
     id: event.id,
     communityId: event.communityId,
-    communityName: event.communityName,
+    communityName: community.name,
     title: event.title,
     startAt: event.startAt,
     endAt: event.endAt,
     capacity: event.capacity,
     // 残りの枠数 = 定員 - 申込み済みの人数
-    remainingSeats: event.capacity - event.appliedCount,
+    remainingSeats: event.capacity - appliedCount,
   }
 }
 
 /**
  * 【何のため】イベント一覧・検索の結果を、要件定義書 5.8 のルールどおりに作る。
- * @param events 偽のデータベースにある、すべてのイベント
+ * @param db 偽のデータベース
  * @param query 検索欄に入力された文字（空なら、検索していない）
  * @param page 表示したいページ番号
  * @param now 今の日時（終了したイベントを除くために使う）
  */
-export function searchEvents(
-  events: MockEvent[],
-  query: string,
-  page: number,
-  now: Date,
-): EventListResponse {
+export function searchEvents(db: MockDb, query: string, page: number, now: Date): EventListResponse {
   // 開催前（終了日時が今より後）のイベントだけを残す
-  const upcoming = events.filter((event) => new Date(event.endAt) > now)
+  const upcoming = db.events.filter((event) => new Date(event.endAt) > now)
 
   const words = splitWords(query)
   // 単語が1つもなければ、「検索していない」として扱う
@@ -111,7 +116,7 @@ export function searchEvents(
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   // 表示するのは、(ページ番号 - 1) × 30 件目から 30件分
   const start = (page - 1) * PAGE_SIZE
-  const items = limited.slice(start, start + PAGE_SIZE).map(toSummary)
+  const items = limited.slice(start, start + PAGE_SIZE).map((event) => toEventSummary(db, event))
 
   return { items, totalCount, page, pageSize: PAGE_SIZE, totalPages, limitExceeded }
 }
