@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  【役割】users テーブルの SQL（UserMapper.java のメソッドと、id の名前で結び付く）。
+  【なぜ必要か】SQL を Java のコードから分けて、SQL だけを読めば何をしているか分かるようにするため。
+  値は必ず #{名前} で渡す（SQL インジェクションの対策。${} は使わない）。
+-->
+<mapper namespace="com.campfires.account.UserMapper">
+
+    <!-- テーブルの列と、User（record）の項目を結び付ける。record は値を後から入れられないので、constructor で渡す -->
+    <resultMap id="user" type="com.campfires.account.User">
+        <constructor>
+            <idArg column="id" name="id" javaType="_long"/>
+            <arg column="real_name" name="realName" javaType="String"/>
+            <arg column="nickname" name="nickname" javaType="String"/>
+            <arg column="email" name="email" javaType="String"/>
+            <arg column="password_hash" name="passwordHash" javaType="String"/>
+            <arg column="deleted_at" name="deletedAt" javaType="java.time.Instant"/>
+            <arg column="created_at" name="createdAt" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <!-- 何度も使う列の一覧。<include refid="columns"/> で埋め込む -->
+    <sql id="columns">
+        id, real_name, nickname, email, password_hash, deleted_at, created_at
+    </sql>
+
+    <select id="findById" resultMap="user">
+        SELECT <include refid="columns"/> FROM users WHERE id = #{id}
+    </select>
+
+    <!-- FOR UPDATE：この行をロックし、ほかの処理が同じ行を書き換えるのを、処理が終わるまで待たせる -->
+    <select id="findByIdForUpdate" resultMap="user">
+        SELECT <include refid="columns"/> FROM users WHERE id = #{id} FOR UPDATE
+    </select>
+
+    <!-- lower() で小文字にそろえて比べる。索引（users_email_unique）も lower(email) で作っているので、速く探せる -->
+    <select id="findActiveByEmail" resultMap="user">
+        SELECT <include refid="columns"/> FROM users
+        WHERE lower(email) = lower(#{email}) AND deleted_at IS NULL
+    </select>
+
+    <!--
+      INSERT … RETURNING：登録した行を、そのまま返してもらう（番号と登録日時はデータベースが決めるため）。
+      返事を受け取るので select として書き、flushCache="true" で MyBatis の一時的な記憶（キャッシュ）を消す
+    -->
+    <select id="insert" resultMap="user" flushCache="true">
+        INSERT INTO users (real_name, nickname, email, password_hash, policies_agreed_at, policies_version)
+        VALUES (#{realName}, #{nickname}, #{email}, #{passwordHash}, now(), #{policiesVersion})
+        RETURNING <include refid="columns"/>
+    </select>
+
+    <update id="updateNickname">
+        UPDATE users SET nickname = #{nickname} WHERE id = #{id} AND deleted_at IS NULL
+    </update>
+
+    <update id="markDeleted">
+        UPDATE users
+        SET real_name = NULL, nickname = NULL, email = NULL, password_hash = NULL, deleted_at = now()
+        WHERE id = #{id}
+    </update>
+</mapper>

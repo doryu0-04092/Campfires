@@ -1,6 +1,8 @@
 package com.campfires.common.web;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -41,7 +43,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ProblemDetail> handleApiException(ApiException exception) {
-        return ResponseEntity.status(exception.getStatus()).body(Problems.of(exception));
+        // ヘッダー（Retry-After など）があれば、返事に付ける
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(exception.getStatus());
+        exception.getHeaders().forEach((name, value) -> builder.header(name, value));
+        return builder.body(Problems.of(exception));
     }
 
     /**
@@ -70,8 +75,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException exception,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        // 引っかかった項目を1つずつ、FieldErrorItem に変える。stream() は一覧を1つずつ処理する書き方
+        // 引っかかった項目を1つずつ、FieldErrorItem に変える。stream() は一覧を1つずつ処理する書き方。
+        // 1つの項目で複数のルールに引っかかったとき（例：空で、形も違う）は、最初の1つだけを返す（偽の API と同じ）。
+        // filter(seen::add) は「初めて出てきた項目の名前なら残す」という意味（Set の add は、すでにあれば false を返す）
+        Set<String> seen = new HashSet<>();
         List<FieldErrorItem> errors = exception.getBindingResult().getFieldErrors().stream()
+                .filter(error -> seen.add(error.getField()))
                 .map(error -> new FieldErrorItem(error.getField(), error.getDefaultMessage()))
                 .toList();
         return ResponseEntity.badRequest().body(Problems.of(ApiException.validation(errors)));

@@ -33,10 +33,10 @@ src/main/java/com/campfires/
 │   ├─ security/             ログイン、CSRF、権限（Spring Security の設定）
 │   └─ web/                  エラーの返し方（Problem Details）
 ├─ auth/                     アカウント登録、ログイン、ログアウト、CSRF トークン
-├─ account/                  自分のアカウント（Issue #32 で作る）
+├─ account/                  自分のアカウント（情報の取得、ニックネームの変更、アカウントの削除）
 ├─ community/                コミュニティとメンバー（Issue #33 で作る）
-├─ event/                    イベントと申込み（Issue #34 で作る）
-└─ notification/             お知らせ（Issue #35 で作る）
+├─ event/                    イベントと申込み（申込みの取り消しの共通処理だけ作成済み。API は Issue #34 で作る）
+└─ notification/             お知らせ（お知らせを作る SQL だけ作成済み。API は Issue #35 で作る）
 
 src/main/resources/
 ├─ application.properties    設定
