@@ -54,6 +54,12 @@
   cursor: pointer;             /* マウスを乗せたとき、指の形にする */
 }
 
+/* ログインしている人のニックネーム：少し薄い文字にする */
+.userName {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
 /* 押せないボタン：薄くして、押せないことが分かるようにする */
 .menuButton:disabled {
   opacity: 0.5;                /* 半分の濃さにする */
