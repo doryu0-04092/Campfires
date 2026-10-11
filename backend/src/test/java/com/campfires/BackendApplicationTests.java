@@ -38,7 +38,7 @@ class BackendApplicationTests {
 		// containsExactlyInAnyOrder：順番は問わず、ちょうどこのテーブルだけがあること
 		assertThat(tables).containsExactlyInAnyOrder(
 				"applications", "communities", "events", "flyway_schema_history", "join_requests",
-				"login_failures", "memberships", "notifications", "users");
+				"login_failures", "memberships", "notifications", "spring_session", "spring_session_attributes", "users");
 	}
 
 }
