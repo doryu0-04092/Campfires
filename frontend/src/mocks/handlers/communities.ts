@@ -497,7 +497,7 @@ export const communityHandlers = [
       return problem(409, 'CANNOT_REMOVE_OWNER', 'オーナーは除名できません。')
     }
     db.memberships = db.memberships.filter((m) => m !== membership)
-    cancelUpcomingApplications(targetId, community.id)
+    cancelUpcomingApplications(targetId, user.id, community.id)
     return new HttpResponse(null, { status: 204 })
   }),
 
@@ -527,7 +527,7 @@ export const communityHandlers = [
       return problem(409, 'OWNER_CANNOT_LEAVE', 'オーナーは退会できません。コミュニティをアーカイブしてください。')
     }
     db.memberships = db.memberships.filter((m) => !(m.communityId === community.id && m.userId === user.id))
-    cancelUpcomingApplications(user.id, community.id)
+    cancelUpcomingApplications(user.id, user.id, community.id)
     return new HttpResponse(null, { status: 204 })
   }),
 ]

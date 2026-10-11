@@ -2,8 +2,12 @@
  * 【役割】イベントのデータの形（型）を決めるファイル。
  * 【なぜ必要か】画面と API の間でやり取りするデータの形を1か所で決めておくと、
  * 名前の書き間違いや、足りない項目を TypeScript が見つけてくれるため。
- * ここで決めた形は、あとで作る API 仕様書の下書きにもなる。
+ * 形は API 仕様書（docs/api/openapi.yaml）の events と applications に合わせている。
  */
+
+import type { PageInfo } from './api'
+import type { CommunityRole } from './community'
+import type { UserRef } from './user'
 
 /**
  * 【何のため】イベント一覧に表示する、イベント1件分のデータの形。
@@ -25,6 +29,76 @@ export type EventSummary = {
   capacity: number
   // 残りの枠数（0 なら満席）
   remainingSeats: number
+}
+
+/**
+ * 【何のため】申込みの状態。applied：申込み済み、waitlisted：キャンセル待ち。
+ */
+export type ApplicationStatus = 'applied' | 'waitlisted'
+
+/**
+ * 【何のため】自分の申込みの状況。
+ */
+export type MyApplication = {
+  status: ApplicationStatus
+  // キャンセル待ちの何番目か（1から始まる）。申込み済みのときは null
+  waitlistPosition: number | null
+  appliedAt: string
+}
+
+/**
+ * 【何のため】イベントの詳細（GET /api/communities/:communityId/events/:eventId）。
+ * 一覧の情報に、説明、場所、締め切り、自分との関係などを足したもの。
+ */
+export type EventDetail = EventSummary & {
+  description: string
+  location: string
+  // 申込み締め切り日時（キャンセルの期限も兼ねる。要件定義書 5.2）
+  applicationDeadline: string
+  // キャンセル待ちの人数
+  waitlistCount: number
+  // コミュニティをアーカイブした日時（していなければ null）
+  communityArchivedAt: string | null
+  // コミュニティでの自分の立場（メンバーでない、またはログインしていないときは null）
+  myRole: CommunityRole | null
+  // 自分の申込みの状況（申し込んでいない、またはログインしていないときは null）
+  myApplication: MyApplication | null
+  createdAt: string
+}
+
+/**
+ * 【何のため】イベントを作成・編集するときに送るデータ。
+ * 日時の前後関係のルール：今 < 開始日時、申込み締め切り日時 < 開始日時 < 終了日時
+ */
+export type EventInput = {
+  title: string
+  description: string
+  startAt: string
+  endAt: string
+  applicationDeadline: string
+  location: string
+  capacity: number
+}
+
+/**
+ * 【何のため】申込者一覧に表示する、1人分の情報。
+ */
+export type Application = {
+  user: UserRef
+  status: ApplicationStatus
+  waitlistPosition: number | null
+  appliedAt: string
+}
+
+export type ApplicationListResponse = PageInfo & {
+  items: Application[]
+}
+
+/**
+ * 【何のため】コミュニティのイベントの一覧の返事（GET /api/communities/:communityId/events）。
+ */
+export type CommunityEventListResponse = PageInfo & {
+  items: EventSummary[]
 }
 
 /**
