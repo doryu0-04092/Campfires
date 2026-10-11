@@ -45,14 +45,25 @@ function MemberManagementPage() {
     return <p className={formStyles.formError}>メンバー管理は、オーナーと運営スタッフだけが使えます。</p>
   }
 
+  return <MemberManagementContent community={community.data} />
+}
+
+/**
+ * 【何のため】参加申請の一覧と、メンバーの一覧を表示する。
+ * 参加申請を承認するとメンバーが増えるので、そのときはメンバーの一覧も読み込み直す。
+ */
+function MemberManagementContent({ community }: { community: CommunityDetail }) {
+  // メンバーの一覧を読み込み直すための番号。承認するたびに 1 増やす
+  const [membersVersion, setMembersVersion] = useState(0)
+
   return (
     <section>
-      <h1>メンバー管理：{community.data.name}</h1>
+      <h1>メンバー管理：{community.name}</h1>
       <p>
-        <Link to={`/communities/${communityId}`}>コミュニティの詳細へ戻る</Link>
+        <Link to={`/communities/${community.id}`}>コミュニティの詳細へ戻る</Link>
       </p>
-      <JoinRequestSection community={community.data} />
-      <MemberSection community={community.data} />
+      <JoinRequestSection community={community} onApproved={() => setMembersVersion((v) => v + 1)} />
+      <MemberSection community={community} version={membersVersion} />
     </section>
   )
 }
@@ -60,7 +71,7 @@ function MemberManagementPage() {
 /**
  * 【何のため】申請中の参加申請の一覧と、承認・却下のボタンを表示する（F-07）。
  */
-function JoinRequestSection({ community }: { community: CommunityDetail }) {
+function JoinRequestSection({ community, onApproved }: { community: CommunityDetail; onApproved: () => void }) {
   const { isLoading, data, error, reload } = useLoader(`join-requests:${community.id}`, (signal) =>
     fetchJoinRequests(community.id, signal),
   )
@@ -74,6 +85,10 @@ function JoinRequestSection({ community }: { community: CommunityDetail }) {
     try {
       await decideJoinRequest(community.id, joinRequestId, status)
       reload()
+      // 承認したときは、メンバーが増えるので、メンバーの一覧も読み込み直してもらう
+      if (status === 'approved') {
+        onApproved()
+      }
     } catch (e) {
       // ほかの運営スタッフが先に処理した場合など。サーバーの文を出し、一覧を最新にする
       setActionError(e instanceof ApiError ? e.message : '通信中にエラーが発生しました。')
@@ -135,10 +150,11 @@ function JoinRequestSection({ community }: { community: CommunityDetail }) {
  * 【何のため】メンバーの一覧と、運営スタッフの任命・解除、除名のボタンを表示する（F-09、F-19）。
  * 任命・解除と除名のボタンは、オーナーにだけ出す。
  */
-function MemberSection({ community }: { community: CommunityDetail }) {
+function MemberSection({ community, version }: { community: CommunityDetail; version: number }) {
   const [searchParams] = useSearchParams()
   const page = parsePage(searchParams.get('page'))
-  const { isLoading, data, error, reload } = useLoader(`members:${community.id}:${page}`, (signal) =>
+  // version が変わったとき（参加申請を承認したとき）も、読み込み直す
+  const { isLoading, data, error, reload } = useLoader(`members:${community.id}:${page}:${version}`, (signal) =>
     fetchMembers(community.id, page, signal),
   )
   const [actionError, setActionError] = useState<string | null>(null)
