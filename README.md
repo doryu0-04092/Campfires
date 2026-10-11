@@ -38,3 +38,38 @@ npm run dev:api
 ```
 
 http://localhost:5173 を開きます。どちらの方法でも、同じ開発用のアカウント（[frontend/README.md](frontend/README.md) の「開発用のアカウント」）でログインできます。
+
+### 本番用の箱（Docker イメージ）を手元で動かす
+
+本番では、画面と API を1つの Docker イメージにまとめ、Spring Boot が画面のファイルも返します（`Dockerfile`）。
+本番の設定（`backend/src/main/resources/application-prod.properties`）で動くので、データベースのつなぎ先とパスワードは環境変数で渡します。
+
+```
+# イメージを作る（リポジトリのいちばん上のフォルダで）
+docker build -t campfires .
+
+# 本番用のデータベースと、アプリの箱を、同じネットワークで動かす
+# （パスワードは、手元で試すための例。本番では AWS の Secrets Manager から渡す）
+docker network create campfires-prod
+docker run -d --name campfires-db --network campfires-prod \
+  -e POSTGRES_DB=campfires -e POSTGRES_USER=campfires -e POSTGRES_PASSWORD=change-me postgres:17
+docker run -d --name campfires-app --network campfires-prod -p 8081:8080 \
+  -e DB_HOST=campfires-db -e DB_USERNAME=campfires -e DB_PASSWORD=change-me campfires
+```
+
+http://localhost:8081 を開きます。本番の設定では、開発用のデータは入らないので、アカウント登録から始めます。
+
+| 環境変数 | 内容 | 例 |
+|---|---|---|
+| `DB_HOST` | データベースの場所（必須） | `campfires-db` |
+| `DB_PORT` | データベースの入口の番号 | `5432`（省略したとき） |
+| `DB_NAME` | データベースの名前 | `campfires`（省略したとき） |
+| `DB_USERNAME`、`DB_PASSWORD` | データベースの利用者とパスワード（必須） | |
+| `CAMPFIRES_RATE_LIMIT_ENABLED` | ログイン・アカウント登録の回数制限を使うか | `true`（省略したとき） |
+
+本番の設定で、開発中と違うところ
+
+- ログインの状態（セッション）を、データベースに保存する（箱を入れ替えたり増やしたりしても、ログインが切れない）
+- ログイン・アカウント登録の回数を、IP アドレスごとに制限する（ログインは10分間に20回、アカウント登録は1時間に10回まで）
+- ロードバランサーが付けるヘッダーを読み、HTTPS で来たことと、利用者の本当の IP アドレスを正しく扱う
+- 死活監視の URL：`/api/health`（データベースにつながらなければ 503）

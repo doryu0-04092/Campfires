@@ -13,6 +13,7 @@ import org.springframework.security.web.authentication.logout.HttpStatusReturnin
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 
 import com.campfires.account.UserMapper;
 
@@ -45,6 +46,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 登録、ログイン、ログアウト、CSRF トークンは、ログインしていなくても呼べる
                         .requestMatchers("/api/auth/**").permitAll()
+                        // 死活監視（ロードバランサーが呼ぶ）は、ログインしていなくても呼べる
+                        .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                         // 一覧と詳細の取得（GET）は、ログインしていなくても見られる（要件定義書 3章）。
                         // 「*」は URL の1つの区切り（例：番号）に当てはまる
                         .requestMatchers(HttpMethod.GET,
@@ -53,8 +56,33 @@ public class SecurityConfig {
                                 "/api/communities/*",
                                 "/api/communities/*/events",
                                 "/api/communities/*/events/*").permitAll()
-                        // それ以外は、すべてログインが必要
-                        .anyRequest().authenticated())
+                        // それ以外の API は、すべてログインが必要
+                        .requestMatchers("/api/**").authenticated()
+                        // API 以外（画面のファイル：/、/assets/〜、/communities/1 など）は、だれでも読める。
+                        // 画面を読んだあと、画面が API を呼ぶときに、上の決まりでログインを確かめる
+                        .anyRequest().permitAll())
+
+                // ---------- 画面を守る HTTP ヘッダー（Issue #47） ----------
+                .headers(headers -> headers
+                        // CSP（Content Security Policy）：読み込んでよいものを、このサイト（'self'）のものに限る。
+                        // もし画面にプログラムを埋め込まれても（XSS）、外のサイトから読み込んだり、外へ送ったりできないようにする。
+                        // style-src の 'unsafe-inline' は、React の style 属性（style={{ … }}）を使っているため
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(String.join("; ",
+                                "default-src 'self'",
+                                "script-src 'self'",
+                                "style-src 'self' 'unsafe-inline'",
+                                "img-src 'self' data:",
+                                "connect-src 'self'",
+                                "object-src 'none'",
+                                "base-uri 'self'",
+                                "form-action 'self'",
+                                "frame-ancestors 'none'")))
+                        // 別のサイトへ移動するとき、こちらの URL の細かい部分（パス）を送らない
+                        .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        // カメラ、マイク、位置情報などのブラウザの機能を、このサイトでは使わせない
+                        .permissionsPolicyHeader(permissions -> permissions.policy("camera=(), microphone=(), geolocation=()")))
+                // HSTS（「このサイトは HTTPS だけで開く」とブラウザに覚えさせる）は、Spring Security が
+                // HTTPS の通信のときに自動で付ける（本番では、ロードバランサーの HTTPS を、server.forward-headers-strategy で正しく扱う）
 
                 // ---------- エラーの返し方 ----------
                 .exceptionHandling(handling -> handling

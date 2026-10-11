@@ -55,6 +55,14 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<!--
+		  Spring Session JDBC：ログインの状態（セッション）を、データベースに保存する（本番だけ使う）。
+		  箱（コンテナ）を入れ替えたり、2つ以上に増やしたりしても、ログインが切れないようにするため
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-session-jdbc</artifactId>
+		</dependency>
 		<!-- Validation：送られてきたデータの入力チェック（@NotBlank、@Size など） -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
