@@ -22,18 +22,11 @@
   margin-top: 24px;
 }
 
-/* まとまりの見出し（「ユーザー」「コミュニティ管理」） */
+/* まとまりの見出し（「ユーザー」「コミュニティ管理」「イベント管理」）。下の項目との間を少し空ける */
 .groupTitle {
-  margin: 0;
+  margin: 0 0 8px;
   font-size: 15px;
   color: var(--text);
-}
-
-/* 見出しの下の説明（誰向けのメニューか）：小さく、少し薄い文字にする */
-.groupDescription {
-  margin: 2px 0 8px;
-  font-size: 12px;
-  color: var(--text-muted);
 }
 
 /* 項目の一覧：先頭の「・」と余白を消す */

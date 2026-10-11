@@ -1,8 +1,9 @@
 /**
  * 【役割】画面の左側に表示するメニュー（サイドバー）。
  * 【なぜ必要か】各画面へ移動する入り口を1か所にまとめるため。
- * 「ユーザー」（利用者の画面）と「コミュニティ管理」（オーナー・運営スタッフの画面）の
- * 2つのまとまりに分けて並べる。
+ * 「ユーザー」（利用者の画面）、「コミュニティ管理」（コミュニティとメンバーの管理）、
+ * 「イベント管理」（イベントと申込みの管理）の3つのまとまりに分けて並べる。
+ * 管理の画面を、コミュニティとイベントで分けておくと、どこで何を管理するのかが分かりやすくなる。
  * 並べる画面は docs/screens.md の「4. 画面の配置」に合わせている。
  */
 
@@ -29,8 +30,6 @@ type MenuItem = {
 type MenuGroup = {
   // まとまりの見出し
   title: string
-  // 見出しの下に添える、誰向けのメニューかの説明
-  description: string
   // まとまりに入る項目
   items: MenuItem[]
 }
@@ -61,27 +60,38 @@ const devManageItems: MenuItem[] = import.meta.env.DEV
   ? [
       { to: '/manage/communities/1/edit', label: 'コミュニティ編集' },                   // S-06
       { to: '/manage/communities/1/members', label: 'メンバー管理' },                    // S-07
+    ]
+  : []
+
+// 「イベント管理」のまとまり。イベントの画面は、どれもコミュニティとイベントの番号が必要なので、
+// 開発中だけ、例の番号（1番）で開けるようにする
+const devEventItems: MenuItem[] = import.meta.env.DEV
+  ? [
       { to: '/manage/communities/1/events/new', label: 'イベント作成' },                 // S-08
       { to: '/manage/communities/1/events/1/edit', label: 'イベント編集' },              // S-10
       { to: '/manage/communities/1/events/1/applicants', label: '申込者一覧' },          // S-11
     ]
   : []
 
-// メニュー全体。上に「ユーザー」、下に「コミュニティ管理」を置く。
+// メニュー全体。上から「ユーザー」「コミュニティ管理」「イベント管理」の順に置く。
 // 「管理者」としないのは、要件定義書で「管理者」をアプリの運営者の意味で使っているため。
 // [...a, ...b] は、2つの一覧をつなげて1つにする書き方
 const menuGroups: MenuGroup[] = [
   {
     title: 'ユーザー',
-    description: 'コミュニティに参加して使う',
     items: [...userItems, ...devUserItems],
   },
   {
     title: 'コミュニティ管理',
-    description: 'オーナー・運営スタッフ向け',
     items: [...manageItems, ...devManageItems],
   },
-]
+  {
+    title: 'イベント管理',
+    items: devEventItems,
+  },
+  // filter で、項目が1つもないまとまり（本番の「イベント管理」）を取り除く。
+  // 本番では、イベントの管理の画面へは、イベントの詳細の画面から移動する
+].filter((group) => group.items.length > 0)
 
 /**
  * 【何のため】左側のメニューを表示する。
@@ -113,8 +123,6 @@ function Sidebar() {
         {menuGroups.map((group) => (
           <section key={group.title} className={styles.group}>
             <h2 className={styles.groupTitle}>{group.title}</h2>
-            {/* 誰向けのメニューかを、見出しの下に小さく表示する */}
-            <p className={styles.groupDescription}>{group.description}</p>
             <ul className={styles.list}>
               {/* 項目を1つずつ表示する */}
               {group.items.map((item) => (
