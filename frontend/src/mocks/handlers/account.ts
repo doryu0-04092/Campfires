@@ -97,7 +97,7 @@ export const accountHandlers = [
     db.memberships = db.memberships.filter((m) => m.userId !== user.id || m.role === 'owner')
 
     // 開催前のイベントへの申込みを、すべて取り消す（共通の処理。src/mocks/rules.ts）
-    cancelUpcomingApplications(user.id)
+    cancelUpcomingApplications(user.id, user.id)
 
     // 個人情報を消し、行だけを残す（過去の申込みの記録に「退会したユーザー」と表示するため）
     user.realName = ''

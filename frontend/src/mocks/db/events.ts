@@ -111,8 +111,11 @@ export function createApplications(events: MockEvent[]): MockApplication[] {
   // events.forEach は、一覧の1つずつに対して処理をくり返す書き方
   events.forEach((event, i) => {
     const appliedCount = i % 5 === 0 ? event.capacity : (i * 3) % event.capacity
-    // 申込みは、締め切りの2日前に行われたことにする
-    const appliedAt = new Date(new Date(event.applicationDeadline).getTime() - 2 * DAY).toISOString()
+    // 申込みは、イベントが作られた10分後に行われたことにする。
+    // 申込みの日時は必ず「今」より前にする。未来の日時にすると、今申し込んだ人より後ろの順番になり、
+    // キャンセル待ちの順番（申し込んだ順）がおかしくなるため
+    const appliedTime = new Date(event.createdAt).getTime() + 10 * 60 * 1000
+    const appliedAt = new Date(appliedTime).toISOString()
 
     for (let n = 0; n < appliedCount; n++) {
       applications.push({
@@ -123,6 +126,20 @@ export function createApplications(events: MockEvent[]): MockApplication[] {
         status: 'applied',
         appliedAt,
       })
+    }
+
+    // 満席で、定員が 30人以下のイベントには、キャンセル待ちを2人入れる（キャンセル待ちと繰り上げを試すため）
+    if (appliedCount === event.capacity && event.capacity <= 30) {
+      // キャンセル待ちの人は、満席になったあと（1分後、2分後）に申し込んだことにする
+      for (let n = 0; n < 2; n++) {
+        applications.push({
+          id: applications.length + 1,
+          eventId: event.id,
+          userId: FIRST_DUMMY_USER_ID + event.capacity + n,
+          status: 'waitlisted',
+          appliedAt: new Date(appliedTime + (n + 1) * 60 * 1000).toISOString(),
+        })
+      }
     }
   })
 

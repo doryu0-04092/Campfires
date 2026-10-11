@@ -1,29 +1,56 @@
 /**
  * 【役割】S-08「イベント作成」の画面。URL は /manage/communities/:communityId/events/new
- * 【なぜ必要か】docs/screens.md で決めた画面の1つ。
- * 今は仮の表示だけを置いている。中身は、画面を1つずつ作るときに書く。
+ * 【なぜ必要か】コミュニティにイベントを作るため（F-10）。オーナーと運営スタッフが使える。
+ * アーカイブ中のコミュニティでは作れない（要件定義書 5.9）。
+ * 作成したあとは、そのイベントの詳細（S-09）へ移動する（docs/screens.md 5章）。
  */
 
-// useParams：URL の中の「:communityId」のような部分に入った値を取り出すための関数
-import { useParams } from 'react-router'
-// まだ中身を作っていない画面に、仮の表示を出すための部品
-import PlaceholderPage from '../components/PlaceholderPage'
+import { Link, useNavigate, useParams } from 'react-router'
+import { fetchCommunity } from '../api/communities'
+import { createEvent } from '../api/events'
+import EventForm from '../components/EventForm'
+import formStyles from '../components/Form.module.css'
+import LoadError from '../components/LoadError'
+import { useLoader } from '../utils/useLoader'
 
 /**
  * 【何のため】イベント作成の画面を表示する。
  */
 function EventCreatePage() {
-  // URL から communityId を取り出す。
-  // 例：/manage/communities/3/events/new なら、communityId は "3"
-  const { communityId } = useParams()
+  const communityId = Number(useParams().communityId)
+  const navigate = useNavigate()
+  // 自分の立場とアーカイブの状態を確かめるため、コミュニティの詳細を読み込む
+  const { isLoading, data, error } = useLoader(`community:${communityId}`, (signal) => fetchCommunity(communityId, signal))
+
+  if (isLoading) {
+    return <p>読み込み中…</p>
+  }
+  if (error !== undefined || !data) {
+    return <LoadError error={error} />
+  }
+  if (data.myRole !== 'owner' && data.myRole !== 'staff') {
+    return <p className={formStyles.formError}>イベントを作れるのは、オーナーと運営スタッフだけです。</p>
+  }
+  if (data.archivedAt) {
+    return <p className={formStyles.formError}>アーカイブ中のコミュニティでは、イベントを作れません。</p>
+  }
 
   return (
-    <PlaceholderPage
-      screenId="S-08"
-      title="イベント作成"
-      // `` で囲んだ文字の中の ${ } には、変数の値が入る
-      description={`イベントの内容（申込み締め切り日時、場所、定員など）を入力して作る。（表示中：コミュニティ ${communityId}）`}
-    />
+    <section className={formStyles.container}>
+      <h1>イベントを作る</h1>
+      <p>
+        <Link to={`/communities/${communityId}`}>「{data.name}」の詳細へ戻る</Link>
+      </p>
+      <EventForm
+        initialValue={null}
+        submitLabel="作成する"
+        onSubmit={async (input) => {
+          const created = await createEvent(communityId, input)
+          // 作成に成功したら、そのイベントの詳細へ移動する
+          navigate(`/communities/${communityId}/events/${created.id}`)
+        }}
+      />
+    </section>
   )
 }
 
