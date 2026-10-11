@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  【役割】メンバーと参加申請の SQL（MemberMapper.java のメソッドと、id の名前で結び付く）。
+  【なぜ必要か】参加申請のルール（要件定義書 5.1）と、メンバーの管理（5.4、5.4.1）を、SQL で行うため。
+  ニックネームは users の表とつなぎ合わせて（JOIN）求める。本名とメールアドレスは取り出さない。
+-->
+<mapper namespace="com.campfires.community.MemberMapper">
+
+    <select id="findRole" resultType="string">
+        SELECT role FROM memberships WHERE community_id = #{communityId} AND user_id = #{userId}
+    </select>
+
+    <select id="findLatestJoinRequestStatus" resultType="string">
+        SELECT status FROM join_requests
+        WHERE community_id = #{communityId} AND user_id = #{userId}
+        ORDER BY requested_at DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 参加申請の列に、申請した人のニックネームを足す部品。r は参加申請、u はユーザーの表の別名 -->
+    <sql id="joinRequestColumns">
+        r.id, r.user_id, u.nickname, r.status, r.requested_at
+    </sql>
+
+    <!--
+      WITH 名前 AS (…) は、SQL の中で使う一時的な表を作る書き方。
+      登録した行（RETURNING）を一時的な表にし、ユーザーの表とつなぎ合わせて、ニックネームも一緒に返す
+    -->
+    <select id="insertJoinRequest" resultType="com.campfires.community.JoinRequestRow" flushCache="true">
+        WITH r AS (
+            INSERT INTO join_requests (community_id, user_id, status)
+            VALUES (#{communityId}, #{userId}, 'pending')
+            RETURNING id, user_id, status, requested_at
+        )
+        SELECT <include refid="joinRequestColumns"/>
+        FROM r JOIN users u ON u.id = r.user_id
+    </select>
+
+    <select id="countPendingJoinRequests" resultType="long">
+        SELECT count(*) FROM join_requests WHERE community_id = #{communityId} AND status = 'pending'
+    </select>
+
+    <select id="findPendingJoinRequests" resultType="com.campfires.community.JoinRequestRow">
+        SELECT <include refid="joinRequestColumns"/>
+        FROM join_requests r JOIN users u ON u.id = r.user_id
+        WHERE r.community_id = #{communityId} AND r.status = 'pending'
+        ORDER BY r.requested_at, r.id
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="findJoinRequest" resultType="com.campfires.community.JoinRequestRow">
+        SELECT <include refid="joinRequestColumns"/>
+        FROM join_requests r JOIN users u ON u.id = r.user_id
+        WHERE r.community_id = #{communityId} AND r.id = #{id}
+    </select>
+
+    <!--
+      status = 'pending' の条件を付けて書き換える。2人の運営スタッフが同時に処理しても、
+      先に書き換えた1人だけが成功し、後の人は「書き換えた行が 0」になる（すでに処理済み）
+    -->
+    <update id="decideJoinRequest">
+        UPDATE join_requests SET status = #{status}, decided_at = now()
+        WHERE community_id = #{communityId} AND id = #{id} AND status = 'pending'
+    </update>
+
+    <update id="rejectPendingJoinRequests">
+        UPDATE join_requests SET status = 'rejected', decided_at = now()
+        WHERE community_id = #{communityId} AND status = 'pending'
+    </update>
+
+    <!-- ON CONFLICT DO NOTHING：同じ行（同じコミュニティと同じユーザー）がすでにあれば、何もしない -->
+    <insert id="insertMembership">
+        INSERT INTO memberships (community_id, user_id, role)
+        VALUES (#{communityId}, #{userId}, #{role})
+        ON CONFLICT (community_id, user_id) DO NOTHING
+    </insert>
+
+    <select id="countMembers" resultType="long">
+        SELECT count(*) FROM memberships WHERE community_id = #{communityId}
+    </select>
+
+    <!-- 立場の順番は、CASE で数に置き換えて並べる（owner → 0、staff → 1、member → 2） -->
+    <select id="findMembers" resultType="com.campfires.community.MemberRow">
+        SELECT m.user_id, u.nickname, m.role, m.joined_at
+        FROM memberships m JOIN users u ON u.id = m.user_id
+        WHERE m.community_id = #{communityId}
+        ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'staff' THEN 1 ELSE 2 END, m.joined_at, m.user_id
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="findMember" resultType="com.campfires.community.MemberRow">
+        SELECT m.user_id, u.nickname, m.role, m.joined_at
+        FROM memberships m JOIN users u ON u.id = m.user_id
+        WHERE m.community_id = #{communityId} AND m.user_id = #{userId}
+    </select>
+
+    <update id="updateRole">
+        UPDATE memberships SET role = #{role} WHERE community_id = #{communityId} AND user_id = #{userId}
+    </update>
+
+    <delete id="deleteMembership">
+        DELETE FROM memberships WHERE community_id = #{communityId} AND user_id = #{userId}
+    </delete>
+</mapper>

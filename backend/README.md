@@ -31,10 +31,11 @@ src/main/java/com/campfires/
 ├─ BackendApplication.java   アプリの入り口
 ├─ common/                   すべての機能で使う共通の仕組み
 │   ├─ security/             ログイン、CSRF、権限（Spring Security の設定）
-│   └─ web/                  エラーの返し方（Problem Details）
+│   ├─ search/               検索のルール（単語の分け方、300件の上限）
+│   └─ web/                  エラーの返し方（Problem Details）、一覧のページ分け
 ├─ auth/                     アカウント登録、ログイン、ログアウト、CSRF トークン
 ├─ account/                  自分のアカウント（情報の取得、ニックネームの変更、アカウントの削除）
-├─ community/                コミュニティとメンバー（Issue #33 で作る）
+├─ community/                コミュニティとメンバー（一覧・検索、作成・編集、アーカイブ、参加申請、運営スタッフ、除名、退会）
 ├─ event/                    イベントと申込み（申込みの取り消しの共通処理だけ作成済み。API は Issue #34 で作る）
 └─ notification/             お知らせ（お知らせを作る SQL だけ作成済み。API は Issue #35 で作る）
 

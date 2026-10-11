@@ -195,7 +195,7 @@ class AccountApiTest {
     /**
      * 【何のため】削除すると、要件定義書 5.5 のとおりに処理されることを確かめる。
      * - 個人情報が消え、行は残る
-     * - コミュニティから退会する（アーカイブ済みのコミュニティのオーナーの行は残る）
+     * - コミュニティから退会する（アーカイブ済みのコミュニティのオーナーの行は残る）。申請中の参加申請は却下になる
      * - 開催前のイベントへの申込みが取り消され、キャンセル待ちの人が繰り上がる
      * - 終了したイベントの申込みの記録は残る
      * - ログアウトした状態になり、もうログインできない。同じメールアドレスで、もう一度登録できる
@@ -222,6 +222,10 @@ class AccountApiTest {
         // 終了したイベントの申込み
         long ended = createEvent(communityId, 10, -5, -4, -3);
         apply(ended, me.id(), "applied", 0);
+        // ほかのコミュニティに、参加を申請している
+        long applying = createCommunity(owner.id(), false);
+        jdbcTemplate.update("INSERT INTO join_requests (community_id, user_id, status) VALUES (?, ?, 'pending')",
+                applying, me.id());
 
         deleteMe(me, PASSWORD).andExpect(status().isNoContent());
 
@@ -242,6 +246,11 @@ class AccountApiTest {
         assertThat(applicationStatus(upcoming, me.id())).isNull();
         assertThat(applicationStatus(upcoming, waiting.id())).isEqualTo("applied");
         assertThat(applicationStatus(ended, me.id())).isEqualTo("applied");
+
+        // 申請中の参加申請は却下になる（削除したユーザーが、後から承認されないように）
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM join_requests WHERE community_id = ? AND user_id = ?", String.class, applying, me.id()))
+                .isEqualTo("rejected");
 
         // ログアウトした状態になり、もうログインできない
         assertThat(me.session().isInvalid()).isTrue();
