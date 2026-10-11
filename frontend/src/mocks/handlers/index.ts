@@ -9,9 +9,16 @@ import { accountHandlers } from './account'
 import { authHandlers } from './auth'
 import { communityHandlers } from './communities'
 import { eventHandlers } from './events'
+import { notificationHandlers } from './notifications'
 
 // ... は「一覧の中身を、ここに並べる」という書き方。分野ごとの一覧をつなげて1つにしている
-export const handlers = [...authHandlers, ...accountHandlers, ...communityHandlers, ...eventHandlers]
+export const handlers = [
+  ...authHandlers,
+  ...accountHandlers,
+  ...communityHandlers,
+  ...eventHandlers,
+  ...notificationHandlers,
+]
 
 // 開発中に偽の API のファイルを書き換えたときは、ページ全体を読み込み直す。
 // 偽の API はページを開いたときに1回だけ準備されるので、読み込み直さないと、古い一覧のまま動いてしまうため。
