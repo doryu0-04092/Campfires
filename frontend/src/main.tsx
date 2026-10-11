@@ -19,13 +19,20 @@ import { router } from './router.tsx'
 
 /**
  * 【何のため】開発中だけ、偽の API（MSW）を動かし始める。
- * 本番では何もしない。本番では本物のバックエンドの API を使うため。
+ * 本番と、本物の API を使う開発（npm run dev:api）では、偽の API を動かさない。
  *
  * async は「途中で待つ処理を含む関数」という印。await で、偽の API の準備ができるまで待つ。
  */
 async function enableMocking() {
   // 開発用のサーバー（npm run dev）でなければ、何もせずに終わる
   if (!import.meta.env.DEV) {
+    return
+  }
+  // npm run dev:api のとき（.env.api の VITE_API_MODE=real）は、本物の API を使う
+  if (import.meta.env.VITE_API_MODE === 'real') {
+    // 前に偽の API を使ったときの仕組み（Service Worker）がブラウザに残っていたら、取り除く
+    const registrations = await navigator.serviceWorker?.getRegistrations() ?? []
+    await Promise.all(registrations.map((registration) => registration.unregister()))
     return
   }
   // import(...) を関数のように書くと、必要になったときだけファイルを読み込める。

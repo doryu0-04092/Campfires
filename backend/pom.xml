@@ -145,6 +145,15 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+				<configuration>
+					<!--
+					  ./mvnw spring-boot:run で起動したときだけ、dev（開発用）のプロファイルを使う。
+					  dev のときは、開発用の最初のデータ（DevDataLoader）を入れる。jar にまとめた本番のアプリには影響しない
+					-->
+					<profiles>
+						<profile>dev</profile>
+					</profiles>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
