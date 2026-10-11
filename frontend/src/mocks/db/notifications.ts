@@ -29,15 +29,39 @@ export type MockNotification = {
 
 const HOUR = 60 * 60 * 1000
 
+// 古い既読のお知らせの数（スクロールで続きを読み込む動きを試すため、30件より多くする）
+const OLD_READ_COUNT = 45
+
 /**
  * 【何のため】お知らせの表の最初のデータを作る。
- * たろう（1）あてに、締め切り後のキャンセルのお知らせを2件（未読1件、既読1件）入れておく。
+ * たろう（1）あてに、締め切り後のキャンセルのお知らせを入れておく。
+ * - 新しいもの 2件（未読1件、既読1件）
+ * - 古い既読のもの 45件（既読のお知らせが残ることと、スクロールで続きを読み込む動きを試すため）
  */
 export function createNotifications(events: MockEvent[], now: number): MockNotification[] {
-  // Java 勉強会（コミュニティ 1）のイベントを2つ選ぶ
-  const [first, second] = events.filter((event) => event.communityId === 1)
+  // Java 勉強会（コミュニティ 1）のイベントを選ぶ
+  const javaEvents = events.filter((event) => event.communityId === 1)
+  const [first, second] = javaEvents
+
+  // 古い既読のお知らせ。番号は 3 から。1日ずつ古くなるようにする
+  const oldReadNotifications: MockNotification[] = Array.from({ length: OLD_READ_COUNT }, (_, i) => {
+    const event = javaEvents[i % javaEvents.length]
+    return {
+      id: 3 + i,
+      userId: 1,
+      type: 'late_cancellation',
+      eventTitle: event.title,
+      communityId: event.communityId,
+      eventId: event.id,
+      // 参加者03〜参加者12 の誰かがキャンセルしたことにする
+      actorUserId: 7 + (i % 10),
+      readAt: new Date(now - (2 + i) * 24 * HOUR).toISOString(),
+      createdAt: new Date(now - (2 + i) * 24 * HOUR - HOUR).toISOString(),
+    }
+  })
 
   return [
+    ...oldReadNotifications,
     {
       id: 1,
       userId: 1,
