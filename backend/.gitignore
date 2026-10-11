@@ -1,3 +1,7 @@
+# 【役割】Git で管理しないファイルの一覧（バックエンド）。
+# 【なぜ必要か】ビルドで作られるファイル（target）や、エディタの設定を GitHub に上げないため。
+# Spring Initializr が作ったもの。「#」で始まる行はコメント。
+
 HELP.md
 target/
 .mvn/wrapper/maven-wrapper.jar
