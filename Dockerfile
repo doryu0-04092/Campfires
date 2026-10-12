@@ -25,7 +25,7 @@ RUN npm run build
 # ============================================================
 # 段階2：API（Spring Boot）をビルドする（Java 21）
 # ============================================================
-FROM eclipse-temurin:21-jdk AS backend
+FROM eclipse-temurin:24-jdk AS backend
 WORKDIR /app/backend
 # 先に Maven の設定だけをコピーして、必要なライブラリを取ってくる（段階1と同じく、使い回せるようにする）
 COPY backend/mvnw backend/pom.xml ./
@@ -42,7 +42,7 @@ RUN ./mvnw -q package -DskipTests
 # ============================================================
 # Alpine Linux 版の Java 21 の実行環境。Ubuntu 版より入っているソフトが少なく、
 # 脆弱性の数がいちばん少なかった（Trivy で比べた。docs/security.md を参照）
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 # OS のパッケージを、修正済みの最新の版にする（作った時点で直っている脆弱性を残さない）
 RUN apk upgrade --no-cache
