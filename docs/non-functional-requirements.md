@@ -111,7 +111,7 @@
 | 画面のファイルの大きさ | 約120KB（圧縮後） | `npm run build` |
 | 定員を超えない | 100人の同時申込み（自動テスト）、1秒間に50件の申込み（負荷テスト）とも、超過 0件 | ConcurrentApplicationTest、perf/apply.js |
 | HTTPS | HTTP で来たら、HTTPS へ移動（301） | infra/alb.tf。本番で確認 |
-| 外部パッケージの脆弱性 | 高以上 0件。Dependabot を有効にした（脆弱性の知らせと、修正の PR） | npm audit、Trivy、.github/dependabot.yml |
+| 外部パッケージの脆弱性 | 高以上 0件。Dependabot の脆弱性の知らせを有効にした（PR は自動で作らない。部品の版の決め方は docs/security.md） | npm audit、Trivy（CI）、GitHub の Security の画面 |
 | ログ | リクエストごとの ID（trace_id）。アプリのログは 30日、トレースは 14日残す | docs/observability.md |
 | 自動テスト | 業務処理（Service）の行の網羅率 100%（すべてのクラス）。80% を下回ると CI が失敗する | JaCoCo（backend/pom.xml） |
 | 自動チェック | PR のたびに、テスト・lint・ビルド・脆弱性の検査・E2E が動く。通らないと main にマージできない | .github/workflows/ci-cd.yml、ブランチの保護 |
