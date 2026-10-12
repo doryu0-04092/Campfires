@@ -26,7 +26,10 @@ resource "aws_iam_role" "github_deploy" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:ref:refs/heads/main"
+          # このリポジトリは、GitHub の「変わらない番号を使う形（immutable subject）」の設定になっていて、
+          # 身分証の sub が「repo:持ち主@番号/名前@番号:ref:…」の形で送られてくる（GitHub の API の
+          # actions/oidc/customization/sub で確認）。名前だけの形より安全（名前を変えたり、同じ名前で作り直されたりしても、なりすませない）
+          "token.actions.githubusercontent.com:sub" = "${var.github_oidc_subject_prefix}:ref:refs/heads/main"
         }
       }
     }]

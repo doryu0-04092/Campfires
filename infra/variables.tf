@@ -34,10 +34,13 @@ variable "alert_email" {
   sensitive   = true
 }
 
-variable "github_repository" {
-  description = "CD（GitHub Actions）を動かす GitHub のリポジトリ（持ち主/名前）"
+variable "github_oidc_subject_prefix" {
+  description = <<-EOT
+    GitHub が OIDC の身分証（sub）に入れる、リポジトリの名前の部分。「変わらない番号を使う形」なので、持ち主とリポジトリの番号が入る。
+    調べ方：gh api repos/持ち主/名前/actions/oidc/customization/sub の sub_claim_prefix（番号は公開されている情報）
+  EOT
   type        = string
-  default     = "doryu0-04092/Campfires"
+  default     = "repo:doryu0-04092@292095077/Campfires@1389197570"
 }
 
 variable "trace_sampling_ratio" {
