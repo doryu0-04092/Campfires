@@ -22,13 +22,28 @@ ECS Express Mode（Fargate とロードバランサーと HTTPS の証明書を�
 | budget.tf | 費用の見張り（メールで知らせる） |
 | tracing.tf | トレースの受け取り（Transaction Search） |
 | monitoring.tf | ログから作る数字、アラーム、ダッシュボード、保存したログの検索 |
+| alb.tf | ロードバランサーに、HTTP（80番）で来たら HTTPS へ移動させる入口を足す |
 | scripts/harden-alb.sh | Express Mode が作ったロードバランサーの守りを強くする |
+| scripts/deploy.sh | アプリを新しいイメージに入れ替える（CD。手で前の版に戻すときにも使う） |
+| scripts/create-state-bucket.sh | Terraform の記録を置く S3 のバケットを作る（最初に1回だけ） |
 
 ## 準備
 
 1. `terraform.tfvars.example` を `terraform.tfvars` にコピーし、値を入れる（`terraform.tfvars` はリポジトリに入れない）
 2. AWS の認証（`aws configure` など）。アクセスキーは、リポジトリに入れない
-3. `terraform init`
+3. `backend.hcl.example` を `backend.hcl` にコピーし、Terraform の記録を置く S3 のバケットの名前を入れる（下の「Terraform の記録（S3）」）
+4. `terraform init -backend-config=backend.hcl`
+
+## Terraform の記録（S3）
+
+Terraform の記録（どの AWS の部品を作ったか。`terraform.tfstate`）は、S3 のバケットに置いています（`versions.tf` の `backend "s3"`）。
+
+- 版を残す（間違って壊しても、前の版に戻せる。古い版は90日で消える）、暗号化、外からの公開の禁止、暗号化していない通信の禁止
+- `use_lockfile`：2人が同時に `terraform apply` しても、記録が壊れないように、S3 に「使用中」の印を置く
+- バケットは、最初に1回だけ `scripts/create-state-bucket.sh` で作る（バケット自身は、Terraform の記録を置く場所なので、Terraform では作らない）
+- バケットの名前にはアカウントの番号が入るので、`backend.hcl` は Git に入れない
+
+手元にあった記録から移したときは `terraform init -migrate-state -backend-config=backend.hcl` を使った（2026年10月12日）。
 
 ## 作る
 

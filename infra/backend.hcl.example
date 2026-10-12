@@ -1,0 +1,3 @@
+# 【役割】backend.hcl の見本。scripts/create-state-bucket.sh が表示したバケットの名前を書き、backend.hcl として保存する。
+# 【なぜ必要か】バケットの名前にはアカウントの番号が入るので、backend.hcl は Git に入れない（.gitignore）。
+bucket = "campfires-tfstate-（アカウントの番号）"

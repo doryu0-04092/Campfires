@@ -8,7 +8,13 @@
 // startTransition：画面の更新を「急がない更新」としてまとめる（becomeGuest で使う）
 import { startTransition, useEffect, useState, type ReactNode } from 'react'
 import * as authApi from '../api/auth'
-import type { DeleteMeRequest, LoginRequest, SignupRequest, UpdateMeRequest } from '../types/account'
+import type {
+  ChangePasswordRequest,
+  DeleteMeRequest,
+  LoginRequest,
+  SignupRequest,
+  UpdateMeRequest,
+} from '../types/account'
 import { AuthContext, type AuthState } from './authContext'
 
 /**
@@ -90,6 +96,15 @@ function AuthProvider({ children }: AuthProviderProps) {
   }
 
   /**
+   * 【何のため】パスワードを変更する。サーバーがセッションを作り直すが、この端末はログインしたままなので、状態は変えない。
+   * 念のため、CSRF トークンも受け取り直す（ログインのときと同じ扱い）。
+   */
+  async function changePassword(request: ChangePasswordRequest) {
+    await authApi.changePassword(request)
+    await authApi.fetchCsrfToken()
+  }
+
+  /**
    * 【何のため】アカウントを削除する。成功したら、ログインしていない状態にする。
    */
   async function deleteAccount(request: DeleteMeRequest, beforeGuest?: () => void | Promise<void>) {
@@ -116,7 +131,7 @@ function AuthProvider({ children }: AuthProviderProps) {
 
   return (
     // AuthContext.Provider で包むと、中のすべての部品が、value に入れた値を読めるようになる
-    <AuthContext.Provider value={{ state, login, logout, signup, updateMe, deleteAccount }}>
+    <AuthContext.Provider value={{ state, login, logout, signup, updateMe, changePassword, deleteAccount }}>
       {children}
     </AuthContext.Provider>
   )

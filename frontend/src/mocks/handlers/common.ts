@@ -30,6 +30,7 @@ const STATUS_TITLES: Record<number, string> = {
   404: 'Not Found',
   409: 'Conflict',
   429: 'Too Many Requests',
+  503: 'Service Unavailable',
 }
 
 /**

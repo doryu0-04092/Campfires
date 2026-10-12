@@ -1,0 +1,46 @@
+# 【役割】本番のアプリが動いているかを、AWS の外（GitHub Actions）から、15分ごとに確かめる（外からの死活監視）。
+# 【なぜ必要か】非機能要件の「稼働率：外部の監視サービスで、定期的にアクセスして確かめる」を満たすため。
+# AWS の中のアラーム（infra/monitoring.tf）は、AWS の中の数字を見る。こちらは、利用者と同じようにインターネットから開けるかを見る。
+# 失敗すると、GitHub の Actions の一覧に「失敗」と出る（GitHub の通知の設定によっては、メールも届く）。
+#
+# 本番の URL は、リポジトリの変数（Settings → Secrets and variables → Actions → Variables）の PRODUCTION_URL に入れる
+# （URL は公開されているので、秘密の値ではない）。
+# 注意：GitHub は、リポジトリに60日間 push がないと、定期実行を止める（Actions の画面から、もう一度有効にできる）。
+name: Uptime
+
+on:
+  schedule:
+    # 15分ごと（GitHub の混み具合で、数分遅れることがある）
+    - cron: '*/15 * * * *'
+  # 手で動かすこともできる（Actions の画面の Run workflow）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: 死活の確認（/api/health が 200 と {"status":"ok"} を返すか。3回まで試す）
+        env:
+          URL: ${{ vars.PRODUCTION_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "リポジトリの変数 PRODUCTION_URL が設定されていません" >&2
+            exit 1
+          fi
+          # _ は「使わない変数」の名前。一時的な通信の失敗で、すぐに「止まった」としないように、30秒あけて3回まで試す
+          for _ in 1 2 3; do
+            BODY=$(curl -s -m 10 -w '\n%{http_code}' "$URL/api/health" || true)
+            CODE=$(echo "$BODY" | tail -1)
+            if [ "$CODE" = "200" ] && echo "$BODY" | grep -q '"status":"ok"'; then
+              echo "動いています（$CODE）"
+              exit 0
+            fi
+            echo "返事がおかしい（$CODE）。30秒後にもう一度試します"
+            sleep 30
+          done
+          echo "本番のアプリが応答していません。AWS の ECS のサービスと、アプリのログを確かめてください" >&2
+          exit 1

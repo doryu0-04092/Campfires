@@ -40,6 +40,7 @@
 - ログインの状態は、JavaScript から読めない Cookie（HttpOnly）で持つ。ブラウザの保存場所（localStorage）には、メニューの開け閉めの好みだけを入れる
 - データを変える通信には、CSRF トークンを付ける
 - ログインのあとの戻り先は、URL からではなく画面の中の状態から決める（外のサイトへ飛ばされない）
+- パスワードの再設定のリンクのトークンは、URL の「#」の後ろに入れ（サーバーへ送られない）、画面を開いたらすぐに URL から消す（履歴に残さない）。localStorage などには保存しない
 - 本番用のファイルに、開発用のデータや偽の API は入らない
 - CSP で、このサイト以外からプログラムを読み込めないようにする
 
@@ -53,7 +54,9 @@
 | 権限 | オーナーだけ・オーナーと運営スタッフだけの操作を、すべての API で確かめる。URL の番号を書き換えても、ほかのコミュニティを操作できない | 各 API のテスト、SecurityReviewTest |
 | 入力 | 受け取る項目は record に書いたものだけ（ほかの項目は無視）。文字数のチェック。1回に送れるのは 64KB まで | SecurityReviewTest、ProductionSettingsTest |
 | SQL インジェクション | SQL の値は、すべて `#{}` で渡す（`${}` は使わない）。検索は `strpos` で文字として探す | SecurityReviewTest |
-| 回数制限 | ログイン（10分間に20回）、アカウント登録（1時間に10回）を IP アドレスごとに制限（本番） | RateLimitTest |
+| 回数制限 | ログイン（10分間に20回）、アカウント登録（1時間に10回）、パスワードの再設定の依頼（1時間に5回）を IP アドレスごとに制限（本番） | RateLimitTest |
+| パスワードの変更 | 今のパスワードで本人を確かめる。変えると、ほかの端末のセッションを止め、変えた端末のセッションは作り直す（7章） | PasswordChangeApiTest、ProdProfileSessionTest |
+| パスワードの再設定 | 登録の有無を教えない。トークンは 256ビットの乱数で、SHA-256 の値だけを保存。30分・1回だけ。本番はメールを送る仕組みがないので止めている（7章） | PasswordResetApiTest、PasswordResetDisabledApiTest |
 | エラー | 返事に、プログラムの内部の情報（SQL、クラスの名前、Jackson のエラーの文）を入れない | SecurityReviewTest |
 | HTTP ヘッダー | CSP、HSTS（HTTPS のとき）、X-Frame-Options、X-Content-Type-Options、Referrer-Policy、Permissions-Policy | ProductionSettingsTest、ProdProfileSessionTest |
 | CORS | 使わない（画面と API は同じ場所）。ほかのサイトからの通信には、読んでよい許可を返さない | SecurityReviewTest |
@@ -90,7 +93,9 @@
 | RDS の IAM 認証を使わない | パスワードを Secrets Manager で守っている | 自動でパスワードを変える仕組みと合わせて検討する |
 | トレースの部品（ADOT Java エージェント 2.31.0）の中の Jackson 2.22.2 に、高4件（大きな・壊れた JSON によるサービス停止） | 部品の中の閉じた場所にあり、部品の設定と、AWS からの返事を読むときにだけ使う。利用者が送ったデータは、アプリの Jackson（指摘なし）が読む。最新の部品でも直っていない | 直った版の部品が出たら上げる。`.trivyignore.yaml` の期限（2026年12月末）で、もう一度見直す |
 | アラームの知らせ（SNS）を暗号化しない（Trivy AWS-0095） | AWS の説明で、CloudWatch のアラームは、AWS が管理する鍵で暗号化したトピックには送れない（自分の鍵が必要で、月1ドル）。知らせの中身は、アラームの名前と数字だけで、個人の情報は入らない | 知らせに、個人の情報を入れるようになったら |
-| トレースに、URL の `?` より後ろ（検索の言葉など）が記録される | 部品の決まった動き。秘密の値（パスワード、CSRF トークン、セッション）は、URL に入れていない | 検索の言葉を、個人の情報として扱う必要が出たら |
+| トレースに、URL の `?` より後ろ（検索の言葉など）が記録される | 部品の決まった動き。秘密の値（パスワード、CSRF トークン、セッション）は、URL に入れていない。パスワードの再設定のトークンは、画面の URL の「#」の後ろ（`/password/reset#token=…`）に入れ、API には本文（JSON）で送るので、サーバーへ送られる URL には入らない | 検索の言葉を、個人の情報として扱う必要が出たら |
+| パスワードの再設定の依頼で、登録されているときだけデータベースに書く分、返事が少し遅い（数ミリ秒） | 登録されていなくても、トークンを作る・変換する作業は同じように行い、返事の中身も同じにしている。IP アドレスごとの回数制限（1時間に5回）で、たくさん試して時間の差を測ることも難しい | メールの送信を始めるときに、送信を別の処理（キューなど）に任せて、返事の速さをそろえる |
+| パスワードを変える直前（同じミリ秒の中）に作られたセッションは、止まらないことがある。箱が2つあり、箱どうしの時計がずれていると、そのずれの分も同じ | セッションを作った日時と「変えた日時」を、ミリ秒の単位で比べているため。攻撃者が、その瞬間をねらってログインし直すのは、まず無理 | 箱を増やす・時計のずれが大きくなるときは、セッションに「パスワードの世代の番号」を持たせる方法に変える |
 
 Trivy の設定チェックの残りの指摘（AWS-0017、0033、0034、0095、0098、0133、0176、0177）は、すべて上の表の理由で受け入れています。1回目の見直しのときは、バックアップの日数（AWS-0077）も誤って報告されていましたが、2回目の見直しでは出なくなりました。
 
@@ -120,3 +125,24 @@ Trivy の設定チェックの残りの指摘（AWS-0017、0033、0034、0095、
 - `Dockerfile` のトレースの部品（ADOT Java エージェント）は、版と指紋（SHA-256）を決めて入れている。版を上げるときは、Maven Central の `.sha256` の値に書き換える
 - `backend/pom.xml` で、Tomcat と Jackson の版を上書きしている。Spring Boot の新しい版が、これより新しい版を使うようになったら、上書きを消す
 - 定期的に Trivy と `npm audit` を動かす（GitHub Actions の CI に入れる。Issue #49）
+
+## 7. パスワードの変更と再設定（3回目の見直し。2026年10月）
+
+パスワードの変更（F-24）と、パスワードの再設定の仕組み（F-25）を足したときに、想定した攻撃と守りです（要件定義書 5.13）。
+
+| 想定した攻撃・困りごと | 守り | 確かめ方 |
+|---|---|---|
+| パスワードを盗まれ、ほかの端末でログインされたまま | 変えた日時（`users.password_changed_at`）を記録し、それより前に作られたセッションは、次の API の呼び出しでログアウトさせる（`ActiveUserFilter`）。本番のセッションはデータベースに保存しているので、セッションに入れる中身（`LoginUser`）の形は変えず、セッションを作った日時と比べる | PasswordChangeApiTest、ProdProfileSessionTest、E2E（`password.spec.ts`） |
+| 変えた本人まで、ログアウトされる | 変えた端末は、セッションを捨てて作り直す（`LoginSession.restart`）。番号を変えるだけ（`changeSessionId`）だと、作った日時が古いまま残るため。「変えた日時」は、セッションを作る時計と同じ時計（`System.currentTimeMillis()`）のミリ秒で決める（`PasswordChangeClock`）。Windows などでは `Instant.now()` のほうが数ミリ秒先に進むことがあり、そちらを使うと、直後に作ったセッションが「前」になってしまう | PasswordChangeApiTest（新しいセッションの作った日時 ≧ 変えた日時） |
+| 席を外した間に、他人にパスワードを変えられる | 今のパスワードを入力しないと変えられない。間違えると 400（`INVALID_PASSWORD`）。ログインと CSRF トークンが必要 | PasswordChangeApiTest |
+| 再設定の依頼で、登録されているメールアドレスを探る | 返事はいつも 202 と同じ中身。登録されていなくても、トークンを作る・変換する作業は行う。届けるのに失敗しても、エラーを返さない。依頼は IP アドレスごとに1時間に5回まで | PasswordResetApiTest、PasswordResetServiceTest、RateLimitTest |
+| メールを大量に送らせる迷惑行為 | 同じ IP アドレスからの依頼は1時間に5回まで。使えるリンクは、いつも最新の1つだけ | RateLimitTest、PasswordResetApiTest |
+| トークンを推測する・総当たりで当てる | 32バイト（256ビット）の暗号に使える乱数（`SecureRandom`） | PasswordResetServiceTest |
+| データベースの中身が漏れて、リンクを作られる | トークンそのものは保存せず、SHA-256 の値だけを保存する。トークンは十分に長い乱数なので、遅い変換（BCrypt）は要らない | PasswordResetApiTest、PasswordResetTokenMapperSqlTest |
+| 古いリンク・使ったリンクを使われる | 30分で期限切れ。1回だけ使える（行をロックしてから使用済みにするので、同時に2回使っても1回だけ）。もう一度依頼する・パスワードを変える・アカウントを削除すると、前のリンクは使えなくなる。知らない・期限切れ・使用済みは、どれも同じ返事（`INVALID_RESET_TOKEN`） | PasswordResetApiTest、PasswordResetTokenMapperSqlTest |
+| リンクを盗まれる（履歴、Referer、ログ） | トークンは URL の「#」の後ろ（フラグメント）に入れる。「#」より後ろはブラウザがサーバーへ送らないので、画面を開いても、アクセスログ・トレース・ロードバランサーの記録に残らず、Referer にも入らない。画面は、トークンを読んだらすぐに URL から消す（`history.replaceState`。履歴に残さない）。Referrer-Policy は `strict-origin-when-cross-origin`。トークンとリンクは、ログに書かない（開発用の `LoggingPasswordResetNotifier` だけは、手元で試すためにリンクを書く。`@Profile("dev")` なので、本番では使われない）。再設定しても自動ではログインさせない | E2E（`10-password.spec.ts`）、PasswordResetApiTest |
+| リンクの宛先を、攻撃者のサイトにすり替えられる（Host ヘッダー攻撃） | リンクの頭の URL は、リクエストの Host ヘッダーからではなく、設定（`campfires.app-base-url`。本番は環境変数 `APP_BASE_URL`）から作る | PasswordResetApiTest（リンクが設定の URL で始まる） |
+| ロックをかけられた本人が、ログインできない | 再設定すると、ログインの失敗の記録を消して、ロックを解く | PasswordResetApiTest |
+| メールを送る仕組みがないのに、再設定を受け付けてしまう | 本番では `campfires.password-reset.enabled=false`。両方の API が 503（`PASSWORD_RESET_UNAVAILABLE`）を返し、トークンも作らない。リンクを届ける係は、何も送らない `NoopPasswordResetNotifier`（依頼があったことと、ユーザーの番号だけをログに書く） | PasswordResetDisabledApiTest、ProdProfileSessionTest、E2E |
+
+メールの送信を始めるとき（例：Amazon SES）は、`PasswordResetNotifier` の本物の実装を足し、本番の設定を `true` にし、`APP_BASE_URL` に公開している URL を入れます。そのときに、もう一度このページを見直します（送信を別の処理に任せて返事の速さをそろえる、送信元のドメインの認証（SPF・DKIM・DMARC）など）。

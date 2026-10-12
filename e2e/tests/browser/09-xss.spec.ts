@@ -15,7 +15,7 @@
  */
 import { expect, test, type Page } from '@playwright/test'
 
-import { account, runId, sessionOf, storageStatePath } from '../../support/accounts'
+import { account, tag, sessionOf, browserStatePath } from '../../support/accounts'
 import { json } from '../../support/api'
 import { createCommunityViaApi, createEventViaApi, header, joinViaApi, main, openPageAs } from './helpers'
 
@@ -35,8 +35,8 @@ let eventTitle: string
 // 【何のため】攻撃の文字を入れたコミュニティ・イベント・ニックネームを、API で用意する
 test.beforeAll(async () => {
   // 名前は 50文字まで
-  communityName = `${IMG} ${runId()}`
-  eventTitle = `${IMG}${SCRIPT} ${runId()}`
+  communityName = `${IMG} ${tag()}`
+  eventTitle = `${IMG}${SCRIPT} ${tag()}`
   const owner = await sessionOf('owner')
   const member = await sessionOf('member')
   try {
@@ -90,12 +90,12 @@ async function expectNoXss(page: Page, dialogs: string[]) {
 }
 
 test.describe('オーナーの画面', () => {
-  test.use({ storageState: storageStatePath('owner') })
+  test.use({ storageState: browserStatePath('owner') })
 
   test('コミュニティの名前と説明が、文字のまま出る', async ({ page }) => {
     // 【何のため】一覧・検索・詳細・管理の画面で、名前と説明の攻撃の文字が動かないことを確かめる
     const dialogs = watchDialogs(page)
-    await page.goto(`/communities?q=${encodeURIComponent(runId())}`)
+    await page.goto(`/communities?q=${encodeURIComponent(tag())}`)
     await expect(main(page).getByRole('link', { name: communityName })).toBeVisible()
     await expectNoXss(page, dialogs)
 
@@ -116,7 +116,7 @@ test.describe('オーナーの画面', () => {
   test('イベントのタイトル・説明・場所が、文字のまま出る', async ({ page }) => {
     // 【何のため】トップの検索・詳細・選ぶ画面で、イベントの攻撃の文字が動かないことを確かめる
     const dialogs = watchDialogs(page)
-    await page.goto(`/?q=${encodeURIComponent(runId())}`)
+    await page.goto(`/?q=${encodeURIComponent(tag())}`)
     await expect(main(page).getByRole('link', { name: eventTitle })).toBeVisible()
     await expectNoXss(page, dialogs)
 
@@ -148,7 +148,7 @@ test.describe('オーナーの画面', () => {
   test('画面の入力欄から入れた攻撃の文字も、文字のまま出る', async ({ page }) => {
     // 【何のため】API ではなく、画面の入力欄から入れた場合も、同じように安全なことを確かめる
     const dialogs = watchDialogs(page)
-    const name = `${SCRIPT} ${runId()}`
+    const name = `${SCRIPT} ${tag()}`
     await page.goto('/manage/communities/new')
     await page.getByLabel('コミュニティの名前').fill(name)
     await page.getByLabel('説明').fill(`${IMG}\n<a href="javascript:window.__xss=1">押してね</a>`)

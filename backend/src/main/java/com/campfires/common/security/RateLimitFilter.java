@@ -2,6 +2,7 @@ package com.campfires.common.security;
 
 import java.io.IOException;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,7 +23,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * 【役割】ログインとアカウント登録の回数を、IP アドレスごとに制限するフィルター（Issue #47）。
+ * 【役割】ログイン、アカウント登録、パスワードの再設定の依頼の回数を、IP アドレスごとに制限するフィルター（Issue #47）。
  * 【なぜ必要か】ログインの失敗は、メールアドレスごとに5回でロックしている（非機能要件 3章）。
  * しかし、たくさんのメールアドレスを順番に試す攻撃や、アカウントを大量に作る攻撃は、それでは防げない。
  * 同じ IP アドレスからの回数を、決まった時間の中で制限して、こうした攻撃を遅らせる。
@@ -48,6 +49,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     // ログイン：10分間に 20回まで。アカウント登録：1時間に 10回まで（ふつうの使い方では、まず届かない回数）
     static final Rule LOGIN = new Rule("/api/auth/login", 20, 600);
     static final Rule SIGNUP = new Rule("/api/auth/signup", 10, 3600);
+    // パスワードの再設定の依頼：1時間に 5回まで（メールを大量に送らせる迷惑行為と、メールアドレスを探る攻撃を遅らせる）
+    static final Rule PASSWORD_RESET_REQUEST = new Rule("/api/auth/password-reset-requests", 5, 3600);
+    // 制限する API の一覧
+    private static final List<Rule> RULES = List.of(LOGIN, SIGNUP, PASSWORD_RESET_REQUEST);
 
     // 回数制限で断ったことを、ログに残す（攻撃を受けていないかを、あとから調べるため）
     private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
@@ -103,11 +108,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return null;
         }
         String uri = request.getRequestURI();
-        if (LOGIN.path().equals(uri)) {
-            return LOGIN;
-        }
-        if (SIGNUP.path().equals(uri)) {
-            return SIGNUP;
+        // 一覧から、URL が同じ決まりを探す。見つからなければ null（制限しない）
+        for (Rule rule : RULES) {
+            if (rule.path().equals(uri)) {
+                return rule;
+            }
         }
         return null;
     }

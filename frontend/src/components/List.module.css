@@ -25,6 +25,9 @@
 /* カードの一覧：先頭の「・」を消し、カードどうしの間を空ける */
 .list {
   display: grid;
+  /* 列は1つ。minmax(0, 1fr) は「幅は 0 から、使える幅いっぱいまで」という意味。
+     中に長い文字（URL など）があっても、列が画面より広がらないようにする（スマートフォンで横にはみ出さないため） */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin: 16px 0 0;
   padding: 0;
@@ -50,6 +53,13 @@
   margin: 4px 0 0;
   font-size: 14px;
   color: var(--text-muted);
+}
+
+/* 項目名（dt）と値（dd）の組を、1行に「項目名：値」と並べる（コミュニティ詳細の、オーナー・メンバー数など） */
+.metaList dt,
+.metaList dd {
+  display: inline;           /* 横に並べる（dt と dd は、最初は縦に並ぶため） */
+  margin: 0;                 /* dd に最初から付いている左の余白を消す */
 }
 
 /* 長い説明：3行を超えたら「…」で省略する */

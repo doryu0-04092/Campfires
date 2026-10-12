@@ -20,9 +20,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import com.campfires.TestcontainersConfiguration;
 
 /**
- * 【役割】ログインの回数制限（IP アドレスごと）のテスト（Issue #47）。
- * 【なぜ必要か】同じ IP アドレスから、決まった回数（10分間に 20回）を超えてログインを試すと 429 になり、
- * ほかの IP アドレスは影響を受けないことを確かめるため。
+ * 【役割】ログインと、パスワードの再設定の依頼の回数制限（IP アドレスごと）のテスト（Issue #47）。
+ * 【なぜ必要か】同じ IP アドレスから、決まった回数（ログインは10分間に 20回、再設定の依頼は1時間に 5回）を超えて試すと
+ * 429 になり、ほかの IP アドレスは影響を受けないことを確かめるため。
  * 回数制限は本番だけ使うので、このテストだけ、properties で使うようにして起動する。
  */
 @Import(TestcontainersConfiguration.class)
@@ -55,5 +55,30 @@ class RateLimitTest {
                 .andExpect(jsonPath("$.code").value("RATE_LIMITED"))
                 .andExpect(header().exists("Retry-After"));
         mockMvc.perform(login("203.0.113.20")).andExpect(status().isUnauthorized());
+    }
+
+    /** 【何のため】指定した IP アドレスから、パスワードの再設定を依頼するリクエストを作る。 */
+    private MockHttpServletRequestBuilder passwordResetRequest(String ip) {
+        return post("/api/auth/password-reset-requests").with(csrfToken()).with(request -> {
+            request.setRemoteAddr(ip);
+            return request;
+        }).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"" + UUID.randomUUID() + "@example.com\"}");
+    }
+
+    /**
+     * 【何のため】同じ IP アドレスから 6回目の再設定の依頼は 429 になり、ほかの IP アドレスは依頼できることを確かめる
+     * （メールを大量に送らせる迷惑行為や、メールアドレスを探る攻撃を遅らせるため）。
+     */
+    @Test
+    void 再設定の依頼を同じIPアドレスから送りすぎると429() throws Exception {
+        for (int i = 0; i < RateLimitFilter.PASSWORD_RESET_REQUEST.maxRequests(); i++) {
+            mockMvc.perform(passwordResetRequest("203.0.113.30")).andExpect(status().isAccepted());
+        }
+        mockMvc.perform(passwordResetRequest("203.0.113.30"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("RATE_LIMITED"))
+                .andExpect(header().exists("Retry-After"));
+        mockMvc.perform(passwordResetRequest("203.0.113.40")).andExpect(status().isAccepted());
     }
 }

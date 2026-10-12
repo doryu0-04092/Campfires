@@ -3,16 +3,19 @@
  * 【なぜ必要か】メールアドレスとパスワードでログインするため（F-02）。
  * 失敗したときの表示は、API が返すエラーの code（docs/api/openapi.yaml の login）で切り替える。
  * ログインが必要な画面から移動してきた場合は、ログインのあと、その画面に戻る。
+ * パスワードの再設定（F-25）を使えるときだけ、「パスワードを忘れた場合」のリンクを出す（使える機能の一覧 GET /api/auth/features で判断）。
  */
 
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router'
+import { fetchAuthFeatures } from '../api/auth'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import FormField from '../components/FormField'
 import PasswordField from '../components/PasswordField'
 import formStyles from '../components/Form.module.css'
 import { toFieldMessages } from '../utils/fieldErrors'
+import { useLoader } from '../utils/useLoader'
 import styles from './LoginPage.module.css'
 
 /**
@@ -25,6 +28,10 @@ function LoginPage() {
   // ログインが必要な画面（RequireAuth）から来た場合は、その場所が state.from に入っている。
   // as は「この形だと信じて扱う」という書き方。来た場所がなければトップ（/）に戻る
   const from = (location.state as { from?: Location } | null)?.from?.pathname ?? '/'
+  // ほかの画面から渡された知らせ（例：パスワードの再設定の画面から「再設定しました」）
+  const notice = (location.state as { notice?: string } | null)?.notice
+  // 今使える機能の一覧。読み込めなかったときは、リンクを出さない（「お問い合わせください」の案内を出す）
+  const { data: features } = useLoader('auth-features', (signal) => fetchAuthFeatures(signal))
 
   // 入力中のメールアドレスとパスワード
   const [email, setEmail] = useState('')
@@ -78,6 +85,13 @@ function LoginPage() {
     <section className={formStyles.container}>
       <h1>ログイン</h1>
 
+      {/* 成功の知らせ。role="status" で、読み上げソフトに（作業を邪魔しない形で）読み上げてもらう */}
+      {notice && (
+        <p className={formStyles.success} role="status">
+          {notice}
+        </p>
+      )}
+
       {/* エラーの文。role="alert" で、読み上げソフトにすぐに読み上げてもらう */}
       {formError && (
         <p className={formStyles.formError} role="alert">
@@ -114,7 +128,14 @@ function LoginPage() {
       <p className={formStyles.note}>
         アカウントをお持ちでない方は <Link to="/signup">アカウント登録</Link>
       </p>
-      <p className={formStyles.note}>パスワードを忘れた場合は、お問い合わせください。</p>
+      {/* パスワードの再設定を使えるときはリンクを、使えないとき（メールを送る仕組みがない本番など）は案内を出す */}
+      {features?.passwordResetEnabled ? (
+        <p className={formStyles.note}>
+          <Link to="/password/forgot">パスワードを忘れた場合</Link>
+        </p>
+      ) : (
+        <p className={formStyles.note}>パスワードを忘れた場合は、お問い合わせください。</p>
+      )}
 
       {/* 開発中だけ、偽のアカウントの一覧を表示する（本番用のファイルには含まれない） */}
       {import.meta.env.DEV && <DevAccounts />}

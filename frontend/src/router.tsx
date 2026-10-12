@@ -30,6 +30,8 @@ import SelectEventPage from './pages/SelectEventPage'
 // 共通の画面
 import SignupPage from './pages/SignupPage'
 import LoginPage from './pages/LoginPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import NotificationListPage from './pages/NotificationListPage'
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
 import TermsPage from './pages/TermsPage'
@@ -92,6 +94,9 @@ export const router = createBrowserRouter([
       // ---------- 共通の画面 ----------
       { path: 'signup', Component: SignupPage },                  // S-02
       { path: 'login', Component: LoginPage },                    // S-03
+      // パスワードを忘れた人の画面は、ログインしていなくても開ける（RequireAuth の外に置く）
+      { path: 'password/forgot', Component: ForgotPasswordPage }, // S-20
+      { path: 'password/reset', Component: ResetPasswordPage },   // S-21
       { path: 'privacy', Component: PrivacyPolicyPage },          // S-13
       { path: 'terms', Component: TermsPage },                    // S-14
       // 「*」は「上のどれにも当てはまらない URL」という意味

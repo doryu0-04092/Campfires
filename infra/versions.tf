@@ -7,6 +7,16 @@ terraform {
   # 1.11 以上：パスワードを記録に残さない write-only の項目を使うため（rds.tf）
   required_version = ">= 1.11"
 
+  # Terraform の記録（tfstate）を、S3 に置く（scripts/create-state-bucket.sh で作ったバケット）。
+  # バケットの名前は backend.hcl（Git に入れない）から読む：terraform init -backend-config=backend.hcl
+  # use_lockfile：S3 の中に「使用中」の印のファイルを置き、2人が同時に apply して記録を壊さないようにする（Terraform 1.10 から）
+  backend "s3" {
+    key          = "campfires/terraform.tfstate"
+    region       = "ap-northeast-1"
+    encrypt      = true
+    use_lockfile = true
+  }
+
   required_providers {
     aws = {
       source = "hashicorp/aws"

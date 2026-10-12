@@ -1,9 +1,11 @@
 package com.campfires.common.web;
 
 import java.io.IOException;
+import java.time.Duration;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.resource.PathResourceResolver;
@@ -26,6 +28,15 @@ public class SpaConfig implements WebMvcConfigurer {
      */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        // /assets/ の中のファイル（ビルドで作られる JavaScript と CSS）は、ブラウザに1年間覚えさせる（毎回取りに来させない）。
+        // ファイルの名前に、中身から作った印（例：index-Ds-20vn2.js の Ds-20vn2）が入っていて、中身が変わると名前も変わるので、
+        // 古いファイルを使い続けることはない。immutable：「この URL の中身は変わらない」という印（確かめの通信も省ける）。
+        // 見つからないときは 404（画面の入り口は返さない）
+        registry.addResourceHandler("/assets/**")
+                .addResourceLocations("classpath:/static/assets/")
+                .setCacheControl(CacheControl.maxAge(Duration.ofDays(365)).cachePublic().immutable())
+                .resourceChain(true);
+        // それ以外（index.html など）は、覚えさせない（新しい版を公開したら、すぐに新しい画面を使ってもらうため）
         registry.addResourceHandler("/**")
                 .addResourceLocations("classpath:/static/")
                 .resourceChain(true)

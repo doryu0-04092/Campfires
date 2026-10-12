@@ -5,6 +5,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -47,6 +48,19 @@ public class AccountController {
     @PatchMapping("/api/me")
     public MeResponse updateMe(@AuthenticationPrincipal LoginUser loginUser, @Valid @RequestBody UpdateMeRequest body) {
         return MeResponse.from(accountService.updateNickname(loginUser.id(), body.nickname()));
+    }
+
+    /**
+     * 【何のため】パスワードを変える（PUT /api/me/password）。成功したら 204（返す中身なし）。
+     * ほかの端末のログインは、使えなくなる（ActiveUserFilter）。操作したこの端末は、ログインしたままにするため、
+     * セッションを捨てて、新しいセッションを作り直す（新しいセッションは、変えた日時より後に作られるので、使い続けられる）。
+     */
+    @PutMapping("/api/me/password")
+    public ResponseEntity<Void> changePassword(@AuthenticationPrincipal LoginUser loginUser,
+            @Valid @RequestBody ChangePasswordRequest body, HttpServletRequest request, HttpServletResponse response) {
+        accountService.changePassword(loginUser.id(), body.currentPassword(), body.newPassword());
+        loginSession.restart(loginUser.id(), request, response);
+        return ResponseEntity.noContent().build();
     }
 
     /**

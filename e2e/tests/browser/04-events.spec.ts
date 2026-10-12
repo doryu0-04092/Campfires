@@ -13,13 +13,13 @@
  */
 import { expect, test, type Page } from '@playwright/test'
 
-import { runId, sessionOf, storageStatePath } from '../../support/accounts'
+import { tag, sessionOf, browserStatePath } from '../../support/accounts'
 import { acceptNextDialog, createCommunityViaApi, localDateTime, main } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
 // このファイルのテストは、すべてオーナーとしてログインした状態で行う
-test.use({ storageState: storageStatePath('owner') })
+test.use({ storageState: browserStatePath('owner') })
 
 let communityId: number
 let communityName: string
@@ -29,9 +29,9 @@ let editedTitle: string
 
 // 【何のため】イベントを作る先のコミュニティを、API で作っておく
 test.beforeAll(async () => {
-  communityName = `E2E イベント用コミュニティ ${runId()}`
-  title = `E2E 画面で作ったイベント ${runId()}`
-  editedTitle = `E2E 編集したイベント ${runId()}`
+  communityName = `E2E イベント用コミュニティ ${tag()}`
+  title = `E2E 画面で作ったイベント ${tag()}`
+  editedTitle = `E2E 編集したイベント ${tag()}`
   const owner = await sessionOf('owner')
   try {
     communityId = await createCommunityViaApi(owner, communityName)
@@ -92,7 +92,7 @@ test('締め切りが開始より後、定員が 0 のときは、エラーが�
   // 【何のため】間違った入力では作られず、どこが間違っているかが、入力欄の下に出ることを確かめる
   await page.goto(`/manage/communities/${communityId}/events/new`)
   await fillEventForm(page, {
-    title: `E2E 作られないイベント ${runId()}`,
+    title: `E2E 作られないイベント ${tag()}`,
     // 締め切りを、開始（14日後の19時）より後にする
     deadline: localDateTime(14, 20),
     capacity: '0',
@@ -112,7 +112,7 @@ test('開始日時が過去、終了が開始より前のときも、エラー�
   // 【何のため】日時の前後関係のチェック（今 < 開始 < 終了）が、画面に出ることを確かめる
   await page.goto(`/manage/communities/${communityId}/events/new`)
   await fillEventForm(page, {
-    title: `E2E 作られないイベント ${runId()}`,
+    title: `E2E 作られないイベント ${tag()}`,
     startAt: localDateTime(-1, 10),
     endAt: localDateTime(-2, 10),
     deadline: localDateTime(-3, 10),

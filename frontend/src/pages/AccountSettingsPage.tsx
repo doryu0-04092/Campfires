@@ -1,6 +1,6 @@
 /**
  * 【役割】S-12「アカウント設定」の画面。URL は /account
- * 【なぜ必要か】自分の情報の確認、ニックネームの変更（F-21）、アカウントの削除（F-17）を行うため。
+ * 【なぜ必要か】自分の情報の確認、ニックネームの変更（F-21）、パスワードの変更（F-24）、アカウントの削除（F-17）を行うため。
  * ログインが必要な画面なので、src/router.tsx で RequireAuth の下に置いている。
  */
 
@@ -9,6 +9,7 @@ import { Link, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import FormField from '../components/FormField'
+import PasswordField from '../components/PasswordField'
 import formStyles from '../components/Form.module.css'
 import type { Me } from '../types/account'
 import { formatDateTime } from '../utils/formatDateTime'
@@ -33,6 +34,7 @@ function AccountSettingsPage() {
       <Profile me={state.me} />
       {/* key は付けない（付けると、変更に成功したときにフォームが作り直され、「変更しました」の知らせが消えてしまうため） */}
       <NicknameForm currentNickname={state.me.nickname} />
+      <PasswordForm />
       <DeleteAccount />
     </section>
   )
@@ -122,6 +124,120 @@ function NicknameForm({ currentNickname }: { currentNickname: string }) {
             disabled={isSubmitting || nickname.trim() === currentNickname}
           >
             {isSubmitting ? '変更中…' : '変更する'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+/**
+ * 【何のため】パスワードを変更するフォームを表示する（F-24）。
+ * 今のパスワード（本人の確認）、新しいパスワード、確認のための新しいパスワード（打ち間違いを防ぐ）の3つを入力する。
+ * 変更すると、ほかの端末のログインは使えなくなる（この端末は、ログインしたまま）。
+ */
+function PasswordForm() {
+  const { changePassword } = useAuth()
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  // 入力欄ごとのエラーの文（currentPassword、newPassword、confirmPassword）
+  const [fieldMessages, setFieldMessages] = useState<Record<string, string>>({})
+  const [formError, setFormError] = useState<string | null>(null)
+  // 変更に成功したことを知らせる文
+  const [message, setMessage] = useState<string | null>(null)
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setFieldMessages({})
+    setFormError(null)
+    setMessage(null)
+
+    // 新しいパスワードと、確認のための入力が同じかを、送る前に画面で確かめる（サーバーには、確認の入力は送らない）
+    if (newPassword !== confirmPassword) {
+      setFieldMessages({ confirmPassword: '確認のため、新しいパスワードと同じものを入力してください。' })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await changePassword({ currentPassword, newPassword })
+      // 成功したら、入力を空に戻す（パスワードを画面に残さないため）
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setMessage('パスワードを変更しました。ほかの端末（スマートフォンなど）では、新しいパスワードでログインし直してください。')
+    } catch (e) {
+      if (!(e instanceof ApiError)) {
+        setFormError('通信中にエラーが発生しました。時間をおいて、もう一度お試しください。')
+      } else if (e.code === 'VALIDATION_ERROR' || e.code === 'INVALID_PASSWORD') {
+        // 入力のチェックで引っかかった、または、今のパスワードが違う：入力欄ごとに文を出す
+        setFieldMessages(toFieldMessages(e.fieldErrors))
+      } else {
+        setFormError('変更できませんでした。時間をおいて、もう一度お試しください。')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className={formStyles.section}>
+      <h2>パスワードの変更</h2>
+      {/* role="status"：読み上げソフトに、成功の知らせを（作業を邪魔しない形で）読み上げてもらう */}
+      {message && (
+        <p className={formStyles.success} role="status">
+          {message}
+        </p>
+      )}
+      {/* role="alert"：エラーは、すぐに読み上げてもらう */}
+      {formError && (
+        <p className={formStyles.formError} role="alert">
+          {formError}
+        </p>
+      )}
+      <form className={formStyles.form} onSubmit={handleSubmit} noValidate>
+        <PasswordField
+          id="account-current-password"
+          label="今のパスワード"
+          // autoComplete="current-password"：ブラウザに保存した、今のパスワードを候補に出してもらう
+          autoComplete="current-password"
+          value={currentPassword}
+          onChange={(event) => setCurrentPassword(event.target.value)}
+          error={fieldMessages.currentPassword}
+        />
+        <PasswordField
+          id="account-new-password"
+          label="新しいパスワード"
+          // autoComplete="new-password"：ブラウザに、新しいパスワードの入力欄だと伝える（強いパスワードの提案などが出る）
+          autoComplete="new-password"
+          maxLength={64}
+          value={newPassword}
+          onChange={(event) => setNewPassword(event.target.value)}
+          hint="8〜64文字。半角の英字・数字・記号が使えます。"
+          error={fieldMessages.newPassword}
+        />
+        <PasswordField
+          id="account-new-password-confirm"
+          label="新しいパスワード（確認）"
+          autoComplete="new-password"
+          maxLength={64}
+          value={confirmPassword}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+          error={fieldMessages.confirmPassword}
+        />
+        <p className={formStyles.note}>
+          変更すると、ほかの端末でのログインは、自動でログアウトになります。この端末は、ログインしたままです。
+        </p>
+        <div className={formStyles.actions}>
+          {/* 3つとも入力するまでは押せない */}
+          <button
+            type="submit"
+            className={formStyles.submit}
+            disabled={isSubmitting || currentPassword === '' || newPassword === '' || confirmPassword === ''}
+          >
+            {isSubmitting ? '変更中…' : 'パスワードを変更する'}
           </button>
         </div>
       </form>

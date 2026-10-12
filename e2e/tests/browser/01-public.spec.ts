@@ -13,7 +13,7 @@
  */
 import { expect, test } from '@playwright/test'
 
-import { account, runId, sessionOf } from '../../support/accounts'
+import { account, tag, sessionOf } from '../../support/accounts'
 import { createCommunityViaApi, createEventViaApi, header, main } from './helpers'
 
 // このファイルのテストは、ログインしていない状態（Cookie なし）で行う。
@@ -30,8 +30,8 @@ let eventId: number
 
 // 【何のため】ファイルの最初に1回だけ、オーナーとして、コミュニティとイベントを API で作っておく
 test.beforeAll(async () => {
-  communityName = `E2E 公開コミュニティ ${runId()}`
-  eventTitle = `E2E 公開イベント ${runId()}`
+  communityName = `E2E 公開コミュニティ ${tag()}`
+  eventTitle = `E2E 公開イベント ${tag()}`
   const owner = await sessionOf('owner')
   try {
     communityId = await createCommunityViaApi(owner, communityName, 'だれでも見られるコミュニティの説明です。')

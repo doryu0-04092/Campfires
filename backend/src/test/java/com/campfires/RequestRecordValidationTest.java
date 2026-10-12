@@ -11,8 +11,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import com.campfires.account.ChangePasswordRequest;
 import com.campfires.account.UpdateMeRequest;
 import com.campfires.auth.LoginRequest;
+import com.campfires.auth.PasswordResetConfirmRequest;
+import com.campfires.auth.PasswordResetRequest;
 import com.campfires.auth.SignupRequest;
 import com.campfires.community.CommunityInput;
 import com.campfires.community.DecideJoinRequestRequest;
@@ -79,6 +82,47 @@ class RequestRecordValidationTest {
     @ValueSource(strings = { "pass word1", "password１", "パスワードです12", "password\t1" })
     void パスワードは半角の英数字と記号だけ(String password) {
         assertThat(invalidFields(signupWithPassword(password))).containsExactly("password");
+    }
+
+    /**
+     * 【何のため】パスワードの変更（ChangePasswordRequest）と再設定（PasswordResetConfirmRequest）の新しいパスワードにも、
+     * アカウントの登録と同じルール（ValidPassword。8〜64文字、半角の英字・数字・記号だけ）が使われていることを確かめる。
+     * 同じ値が、同じ結果（通す・通さない）になることを、境目の値で比べる。
+     */
+    @ParameterizedTest
+    @ValueSource(strings = { "aaaaaaa", "aaaaaaaa", "pass word1", "password１", "パスワードです12" })
+    void 変更と再設定の新しいパスワードは登録と同じルール(String password) {
+        boolean validForSignup = invalidFields(signupWithPassword(password)).isEmpty();
+        assertThat(invalidFields(new ChangePasswordRequest("current", password)).isEmpty()).isEqualTo(validForSignup);
+        assertThat(invalidFields(new PasswordResetConfirmRequest("token", password)).isEmpty())
+                .isEqualTo(validForSignup);
+        // 64文字は通し、65文字と null は通さない
+        assertThat(invalidFields(new ChangePasswordRequest("current", "a".repeat(64)))).isEmpty();
+        assertThat(invalidFields(new ChangePasswordRequest("current", "a".repeat(65)))).containsExactly("newPassword");
+        assertThat(invalidFields(new PasswordResetConfirmRequest("token", null))).containsExactly("newPassword");
+    }
+
+    /**
+     * 【何のため】パスワードの変更では、今のパスワードが空なら通さず、再設定では、トークンが空・長すぎるなら通さないことを確かめる。
+     */
+    @Test
+    void 今のパスワードとトークンは空にできない() {
+        assertThat(invalidFields(new ChangePasswordRequest("", "new-password"))).containsExactly("currentPassword");
+        assertThat(invalidFields(new PasswordResetConfirmRequest(" ", "new-password"))).containsExactly("token");
+        assertThat(invalidFields(new PasswordResetConfirmRequest("a".repeat(101), "new-password")))
+                .containsExactly("token");
+    }
+
+    /**
+     * 【何のため】再設定の依頼（PasswordResetRequest）のメールアドレスは、登録と同じ形のルールで、前後の空白を取り除くことを確かめる。
+     */
+    @Test
+    void 再設定の依頼のメールアドレスの形() {
+        assertThat(invalidFields(new PasswordResetRequest(" a@b.c "))).isEmpty();
+        assertThat(new PasswordResetRequest(" a@b.c ").email()).isEqualTo("a@b.c");
+        assertThat(invalidFields(new PasswordResetRequest("a@b"))).containsExactly("email");
+        assertThat(invalidFields(new PasswordResetRequest(""))).containsExactly("email");
+        assertThat(invalidFields(new PasswordResetRequest(null))).containsExactly("email");
     }
 
     /**

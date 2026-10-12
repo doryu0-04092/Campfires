@@ -15,7 +15,7 @@
  */
 import { expect, test, type Page } from '@playwright/test'
 
-import { runId, sessionOf, storageStatePath } from '../../support/accounts'
+import { tag, sessionOf, browserStatePath } from '../../support/accounts'
 import { createCommunityViaApi, createEventViaApi, main, sidebar } from './helpers'
 
 // 管理メニューの開け閉めを覚えておく名前（src/components/Sidebar.tsx と同じ）
@@ -28,8 +28,8 @@ let eventTitle: string
 
 // 【何のため】オーナーとして、選ぶ画面に出すコミュニティとイベントを、API で作っておく
 test.beforeAll(async () => {
-  communityName = `E2E メニュー用コミュニティ ${runId()}`
-  eventTitle = `E2E メニュー用イベント ${runId()}`
+  communityName = `E2E メニュー用コミュニティ ${tag()}`
+  eventTitle = `E2E メニュー用イベント ${tag()}`
   const owner = await sessionOf('owner')
   try {
     communityId = await createCommunityViaApi(owner, communityName)
@@ -51,7 +51,7 @@ function storedMenuState(page: Page) {
 }
 
 test.describe('オーナーの画面', () => {
-  test.use({ storageState: storageStatePath('owner') })
+  test.use({ storageState: browserStatePath('owner') })
 
   test('管理メニューは最初は閉じていて、開け閉めの状態が覚えられる', async ({ page }) => {
     // 【何のため】ふだん使わない人のために閉じておき、使う人は開いたままにできることを確かめる
@@ -162,7 +162,7 @@ test.describe('オーナーの画面', () => {
 })
 
 test.describe('管理をしていない人（outsider）の画面', () => {
-  test.use({ storageState: storageStatePath('outsider') })
+  test.use({ storageState: browserStatePath('outsider') })
 
   test('選ぶ画面には、何も出ない', async ({ page }) => {
     // 【何のため】管理をしていない人には、選べるコミュニティ・イベントがないことを確かめる

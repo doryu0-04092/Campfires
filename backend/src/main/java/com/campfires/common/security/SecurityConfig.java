@@ -11,6 +11,10 @@ import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.header.HeaderWriterFilter;
+import org.springframework.security.web.header.writers.CacheControlHeadersWriter;
+import org.springframework.security.web.header.writers.DelegatingRequestMatcherHeaderWriter;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -46,7 +50,7 @@ public class SecurityConfig {
 
                 // ---------- ログインなしで呼べる API と、ログインが必要な API ----------
                 .authorizeHttpRequests(auth -> auth
-                        // 登録、ログイン、ログアウト、CSRF トークンは、ログインしていなくても呼べる
+                        // 登録、ログイン、ログアウト、CSRF トークン、使える機能の一覧、パスワードの再設定は、ログインしていなくても呼べる
                         .requestMatchers("/api/auth/**").permitAll()
                         // 死活監視（ロードバランサーが呼ぶ）は、ログインしていなくても呼べる
                         .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
@@ -83,6 +87,13 @@ public class SecurityConfig {
                         .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                         // カメラ、マイク、位置情報などのブラウザの機能を、このサイトでは使わせない
                         .permissionsPolicyHeader(permissions -> permissions.policy("camera=(), microphone=(), geolocation=()"))
+                        // 「ブラウザに覚えさせない（no-store）」のヘッダーは、/assets/ の中のファイル以外にだけ付ける。
+                        // API の返事（個人の情報を含む）や画面の入り口は覚えさせない。/assets/ のファイルは、SpaConfig で1年間覚えさせる
+                        // （画面の表示を速くするため。非機能要件の「画面の表示時間」）
+                        .cacheControl(cache -> cache.disable())
+                        .addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                                new NegatedRequestMatcher(PathPatternRequestMatcher.withDefaults().matcher("/assets/**")),
+                                new CacheControlHeadersWriter()))
                         // ヘッダーを、処理の前に書く（eagerly）。ふだんは、返事を送り出す瞬間に書くが、HEAD のリクエスト
                         // （中身なしで、ヘッダーだけを返す）では、その瞬間を通らずに送り出され、ヘッダーが付かなかった（E2E で発見）。
                         // addObjectPostProcessor は「Spring Security が作った部品（ここではヘッダーを書くフィルター）の設定を、あとから変える」書き方
@@ -119,10 +130,10 @@ public class SecurityConfig {
                         .deleteCookies("JSESSIONID")
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
 
-                // ---------- 削除済みのアカウントのセッションを止める ----------
+                // ---------- 削除済みのアカウントと、パスワードを変える前のセッションを止める ----------
                 // ログインのチェック（AuthorizationFilter）の前に、アカウントが削除されていないかを確かめる。
                 // 削除済みならログアウトさせるので、その後のログインのチェックで「ログインしていない人」として扱われる
-                .addFilterBefore(new ActiveUserFilter(userMapper), AuthorizationFilter.class)
+                .addFilterBefore(new ActiveUserFilter(userMapper, problemWriter), AuthorizationFilter.class)
 
                 // ログインの画面（フォーム）や、ブラウザの認証の窓は使わない（画面は React で作っているため）
                 .formLogin(form -> form.disable())

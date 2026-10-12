@@ -13,7 +13,7 @@
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
-import { account, runId, sessionOf } from '../../support/accounts'
+import { account, tag, sessionOf } from '../../support/accounts'
 import {
   acceptNextDialog,
   createCommunityViaApi,
@@ -36,10 +36,10 @@ const contexts: BrowserContext[] = []
 
 // 【何のため】コミュニティ（メンバーが参加済み）と、手動で承認するイベントを API で作り、3人のブラウザを開いておく
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
-  eventTitle = `E2E 手動承認のイベント ${runId()}`
+  eventTitle = `E2E 手動承認のイベント ${tag()}`
   const owner = await sessionOf('owner')
   try {
-    communityId = await createCommunityViaApi(owner, `E2E 承認用コミュニティ ${runId()}`)
+    communityId = await createCommunityViaApi(owner, `E2E 承認用コミュニティ ${tag()}`)
     await joinViaApi(owner, 'member', communityId)
     eventId = await createEventViaApi(owner, communityId, {
       title: eventTitle,

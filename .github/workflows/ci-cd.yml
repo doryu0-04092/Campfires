@@ -119,10 +119,12 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: e2e/package-lock.json
-      - name: E2E（API とブラウザ。ブラウザは、GitHub の Linux に入っている Microsoft Edge）
+      - name: E2E（API、ブラウザ3種類（Edge・Firefox・WebKit）、スマートフォンの幅、アクセシビリティ）
         working-directory: e2e
         run: |
           npm ci
+          # Firefox と WebKit（Safari のエンジン）を入れる（Edge は、GitHub の Linux に最初から入っている）
+          npx playwright install --with-deps firefox webkit
           npx playwright test
       - name: 失敗したときは、E2E の結果（画面の写真と記録）を残す
         if: failure()

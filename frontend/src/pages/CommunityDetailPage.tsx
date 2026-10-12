@@ -57,10 +57,23 @@ function CommunityDetailPage() {
       {/* white-space: pre-wrap で、説明の中の改行をそのまま表示する */}
       {data.description && <p style={{ whiteSpace: 'pre-wrap' }}>{data.description}</p>}
 
-      <dl className={styles.cardMeta}>
-        <div>オーナー：{displayName(data.owner)}</div>
-        <div>メンバー：{data.memberCount}人</div>
-        {data.myRole && <div>あなたの立場：{ROLE_LABELS[data.myRole]}</div>}
+      {/* dl（説明のリスト）の中は、dt（項目名）と dd（値）の組にする決まりがある（読み上げソフトが「項目名と値」として読むため）。
+          div で包むと、1組ずつ1行に並べられる。見た目は List.module.css の metaList で、項目名と値を横に並べる */}
+      <dl className={`${styles.cardMeta} ${styles.metaList}`}>
+        <div>
+          <dt>オーナー：</dt>
+          <dd>{displayName(data.owner)}</dd>
+        </div>
+        <div>
+          <dt>メンバー：</dt>
+          <dd>{data.memberCount}人</dd>
+        </div>
+        {data.myRole && (
+          <div>
+            <dt>あなたの立場：</dt>
+            <dd>{ROLE_LABELS[data.myRole]}</dd>
+          </div>
+        )}
       </dl>
 
       {/* key に状態を渡すと、状態が変わったときに中のメッセージが消える */}

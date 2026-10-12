@@ -4,8 +4,8 @@
  */
 
 import { delay, http, HttpResponse } from 'msw'
-import type { DeleteMeRequest, UpdateMeRequest } from '../../types/account'
-import { db } from '../db'
+import type { ChangePasswordRequest, DeleteMeRequest, UpdateMeRequest } from '../../types/account'
+import { db, savePasswordResetTokens } from '../db'
 import { cancelUpcomingApplications } from '../rules'
 import { checkCsrf, clearSessionCookie, problem, requireLogin, toMe } from './common'
 import { Validator } from './validation'
@@ -49,6 +49,56 @@ export const accountHandlers = [
     // 過去の申込みの記録などにも、自動で新しいニックネームが表示される（要件定義書 5.6）
     user.nickname = nickname
     return HttpResponse.json(toMe(user))
+  }),
+
+  /**
+   * パスワードを変更する（PUT /api/me/password）。要件定義書 5.13 のとおりに確かめる。
+   * 本物は、ほかの端末のログインを止め、この端末のセッションを作り直す。偽の API のログインの Cookie は
+   * 「user-番号」なので、それはまねしていない（この端末は、ログインしたまま）。
+   */
+  http.put('/api/me/password', async ({ request, cookies }) => {
+    await delay(300)
+    const user = requireLogin(cookies)
+    if (user instanceof Response) {
+      return user
+    }
+    const csrfError = checkCsrf(request, cookies)
+    if (csrfError) {
+      return csrfError
+    }
+
+    const body = (await request.json()) as Partial<ChangePasswordRequest>
+    const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : ''
+    const validator = new Validator()
+    if (currentPassword === '') {
+      validator.errors.push({ field: 'currentPassword', message: '今のパスワードを入力してください。' })
+    }
+    const newPassword = validator.password('newPassword', body.newPassword)
+    if (validator.hasErrors()) {
+      return problem(400, 'VALIDATION_ERROR', '入力内容に誤りがあります。', { errors: validator.errors })
+    }
+    // 本人の確認のため、今のパスワードを確かめる
+    if (currentPassword !== user.password) {
+      return problem(400, 'INVALID_PASSWORD', '今のパスワードが正しくありません。', {
+        errors: [{ field: 'currentPassword', message: '今のパスワードが正しくありません。' }],
+      })
+    }
+    // 今と同じパスワードには変えられない
+    if (newPassword === currentPassword) {
+      return problem(400, 'VALIDATION_ERROR', '入力内容に誤りがあります。', {
+        errors: [{ field: 'newPassword', message: '今のパスワードと違うパスワードを入力してください。' }],
+      })
+    }
+
+    user.password = newPassword
+    // まだ使っていない、パスワードの再設定のリンクは、使えなくする
+    for (const saved of db.passwordResetTokens.values()) {
+      if (saved.userId === user.id && saved.usedAt === null) {
+        saved.usedAt = Date.now()
+      }
+    }
+    savePasswordResetTokens()
+    return new HttpResponse(null, { status: 204 })
   }),
 
   /**
@@ -105,6 +155,13 @@ export const accountHandlers = [
     user.email = ''
     user.password = ''
     user.deletedAt = now.toISOString()
+    // パスワードの再設定のトークンを消す
+    for (const [token, saved] of db.passwordResetTokens) {
+      if (saved.userId === user.id) {
+        db.passwordResetTokens.delete(token)
+      }
+    }
+    savePasswordResetTokens()
 
     // ログアウトした状態にする
     return new HttpResponse(null, {

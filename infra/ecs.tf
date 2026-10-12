@@ -16,7 +16,7 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
 # アプリのログの置き場所。14日たったログは消す（置いておく分だけ料金がかかるため）
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.app_name}"
-  retention_in_days = 14
+  retention_in_days = 30
 }
 
 resource "aws_ecs_express_gateway_service" "app" {

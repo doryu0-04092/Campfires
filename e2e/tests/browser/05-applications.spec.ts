@@ -13,7 +13,7 @@
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
-import { runId, sessionOf } from '../../support/accounts'
+import { tag, sessionOf } from '../../support/accounts'
 import { acceptNextDialog, createCommunityViaApi, createEventViaApi, joinViaApi, main, openPageAs } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
@@ -27,10 +27,10 @@ const contexts: BrowserContext[] = []
 
 // 【何のため】コミュニティ（メンバーが参加済み）と、2つのイベントを API で作り、2人のブラウザを開いておく
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
-  eventTitle = `E2E 定員1人のイベント ${runId()}`
+  eventTitle = `E2E 定員1人のイベント ${tag()}`
   const owner = await sessionOf('owner')
   try {
-    communityId = await createCommunityViaApi(owner, `E2E 申込み用コミュニティ ${runId()}`)
+    communityId = await createCommunityViaApi(owner, `E2E 申込み用コミュニティ ${tag()}`)
     await joinViaApi(owner, 'member', communityId)
     // 定員 1人。メンバーもメンバー以外も、申し込むとすぐに参加が決まる（自動）
     eventId = await createEventViaApi(owner, communityId, {
@@ -41,7 +41,7 @@ test.beforeAll(async ({ browser }: { browser: Browser }) => {
     })
     // メンバー以外は受け付けないイベント
     closedEventId = await createEventViaApi(owner, communityId, {
-      title: `E2E メンバー限定イベント ${runId()}`,
+      title: `E2E メンバー限定イベント ${tag()}`,
       nonMemberApproval: 'closed',
     })
   } finally {

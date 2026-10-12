@@ -66,7 +66,8 @@
   padding: 8px 12px;
   border-radius: 6px;
   background: #ebfbee;
-  color: #2b8a3e;
+  /* 緑の背景との色の差（コントラスト比）を 4.5 以上にするため、少し濃い緑にしている（前の #2b8a3e は 4.07 で足りなかった） */
+  color: #237032;
 }
 
 /* 送信のボタン（強調色） */
@@ -122,6 +123,15 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
+}
+
+/* チェックボックス：指やマウスで押しやすいように、24px 四方にする
+   （WCAG 2.2 AA の「押す場所は 24px 以上」の決まり。ブラウザの最初の大きさは 13px ほどで、小さすぎるため） */
+.checkbox input {
+  flex-shrink: 0;            /* 文が長くても、チェックボックスを縮めない */
+  width: 24px;
+  height: 24px;
+  margin: 0;
 }
 
 /* 補足の文 */
