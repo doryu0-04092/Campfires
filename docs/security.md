@@ -28,8 +28,8 @@
 | 4 | 画面のファイルを返す仕組み（SpaConfig） | Spring のパストラバーサル（`../` でフォルダの外を読む）の確認を通らない書き方だった。Tomcat と Spring Security が先に防ぐので、実際には読まれなかった | Spring の確認（`PathResourceResolver.getResource`）を必ず通す書き方にした | 自動テスト（`../application.properties` を返さない） |
 | 5 | データベースのパスワード | RDS に管理させると 7日ごとに自動で変わるが、ECS は箱の起動のときにしかパスワードを渡さないため、7日ほどでデータベースにつなげなくなる（AWS の説明で確認） | パスワードは Terraform で作り、自動では変えない。記録に残さない仕組み（ephemeral、write-only）を使う。変える手順を infra/README.md に書いた | `terraform validate` |
 | 6 | データベースとの通信 | 暗号化はされるが、相手が本物の RDS かを確かめていなかった | `sslmode=verify-full` にし、AWS の RDS の CA 証明書を箱に入れた | 手元の箱で起動を確認（AWS では公開のときに確認） |
-| 7 | データベースのバックアップ | 1日分だけ | 7日分にした（データベースの大きさまでは追加の料金なし） | `terraform plan` |
-| 8 | ロードバランサー（Express Mode が作る） | HTTP の食い違い（リクエストスマグリング）への対策が Off で作られる（AWS の説明） | ALB の API で defensive にし、決まりに合わないヘッダーを捨てるスクリプトを用意した（`infra/scripts/harden-alb.sh`。公開のあとと、CD のたびに実行） | 公開のあとに、設定を表示して確認 |
+| 7 | データベースのバックアップ | 1日分だけ | 7日分にした（データベースの大きさまでは追加の料金なし）。ただし、AWS の無料プランのあいだは、無料プランの制限で1日にしている（`infra/variables.tf` の `db_backup_retention_days`）。有料プランに上げたら7日に戻す | `terraform plan` |
+| 8 | ロードバランサー（Express Mode が作る） | 決まりに合わないヘッダーを捨てる設定（drop_invalid_header_fields）が Off で作られる。HTTP の食い違い（リクエストスマグリング）への対策（desync mitigation）は、最初から defensive だった（公開のあとに確認。見直しのときは Off と書いていたが、誤りだった） | 2つの設定を確実にするスクリプトを用意した（`infra/scripts/harden-alb.sh`。公開のあとと、CD のたびに実行） | 公開のあとに実行し、drop_invalid_header_fields が true、desync が defensive、HTTPS が TLS 1.2/1.3 の設定であることを確認（2026年10月） |
 | 9 | データベースのセキュリティグループ | 箱だけに絞るつもりで、AWS の説明に書かれていない組み合わせ（自分のセキュリティグループを箱に渡す）を使っていた | 箱とロードバランサーのセキュリティグループは Express Mode に作らせ（説明に書かれた動き）、データベースは VPC の中からだけ許す | `terraform plan` |
 
 ## 3. 守り方の一覧（層ごと）

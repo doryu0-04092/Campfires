@@ -1,0 +1,16 @@
+# 【役割】terraform.tfvars の見本。
+# 【なぜ必要か】terraform.tfvars には、メールアドレスなどの個人の情報を書くので、Git に上げない（.gitignore）。
+# このファイルをコピーして terraform.tfvars を作り、値を書き換えて使う。
+#   cp terraform.tfvars.example terraform.tfvars
+
+# 最初に公開する Docker イメージのタグ（ECR に上げたときに付けた名前。例：Git のコミットの番号）
+image_tag = "replace-with-image-tag"
+
+# 予算の知らせを送るメールアドレス
+alert_email = "you@example.com"
+
+# 1か月の予算（ドル）
+budget_limit_usd = 70
+
+# データベースのバックアップを残す日数（省略すると7日）。AWS の無料プランでは 1 にする
+# db_backup_retention_days = 1

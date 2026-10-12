@@ -65,7 +65,7 @@
 
 - 部品：ADOT Java エージェント 2.31.0（`Dockerfile`。版と、ファイルの指紋（SHA-256）を決めて入れる）
 - 送り先：X-Ray の OTLP の受け口 `https://xray.ap-northeast-1.amazonaws.com/v1/traces`。箱のタスクロールに `AWSXrayWriteOnlyAccess` を付けて、送る権限を渡す（`infra/iam.tf`）
-- 見る場所：Transaction Search（`infra/tracing.tf` で有効にする。すべてのトレースが `aws/spans` のロググループに入る）
+- 見る場所：Transaction Search（`infra/tracing.tf` で有効にする。すべてのトレースが `aws/spans` のロググループに入り、14日で消える。`tracing.tf` の ③）
 - 記録する割合：`infra/variables.tf` の `trace_sampling_ratio`（はじめは 1 ＝ すべて。利用者が増えたら 0.05 にする）
 
 記録される中身の例（`GET /api/communities`）：
