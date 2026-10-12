@@ -9,6 +9,8 @@ const BASE = __ENV.BASE_URL || 'http://localhost:8083'
 const USERS = 200
 const EVENTS = 5
 const PASSWORD = __ENV.PERF_PASSWORD || 'perf-test-password'
+// 申し込む先のコミュニティの、最初の番号。もう一度動かすときは、前と重ならない番号にする（同じ人が同じイベントに2回申し込めないため）
+const COMMUNITY_START = Number(__ENV.COMMUNITY_START || 501)
 
 export const options = {
   // setup（ログインの準備）は、時間がかかってもよい
@@ -55,11 +57,17 @@ export function setup() {
     const after = http.get(`${BASE}/api/auth/csrf`, { headers: { Cookie: `JSESSIONID=${session}` } })
     sessions.push({ session, xsrf: cookieValue(after, 'XSRF-TOKEN') || xsrf })
   }
-  // 開催前のイベントから、コミュニティ 500番台のものを5つ（ほかのテストのデータと重ならないように）
+  // 開催前のイベントから、COMMUNITY_START 番からのコミュニティのものを5つ（ほかのテストのデータと重ならないように）
   const events = []
-  for (let c = 501; events.length < EVENTS; c++) {
+  for (let c = COMMUNITY_START; events.length < EVENTS; c++) {
     const list = http.get(`${BASE}/api/communities/${c}/events`).json('items')
-    if (list.length > 0) events.push({ communityId: c, eventId: list[0].id })
+    if (list.length === 0) continue
+    // 申込みの締め切りを過ぎたイベントは使わない（データを入れてから日がたつと、締め切りを過ぎるものが出るため。
+    // 過ぎたイベントに申し込むと、アプリは正しく 409 を返し、負荷テストの失敗に数えられてしまう）
+    const detail = http.get(`${BASE}/api/communities/${c}/events/${list[0].id}`).json()
+    if (new Date(detail.applicationDeadline).getTime() > Date.now() + 10 * 60 * 1000) {
+      events.push({ communityId: c, eventId: list[0].id })
+    }
   }
   return { sessions, events }
 }
