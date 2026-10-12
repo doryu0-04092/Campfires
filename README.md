@@ -13,7 +13,7 @@
 
 <!-- ↓ 次の1行を、動画の URL（https://github.com/user-attachments/assets/…）に置き換える。URL だけを1行で書き、前後の空いた行は残す -->
 
-（ここに、デモ動画の URL を入れます）
+（https://github.com/user-attachments/assets/3625fd82-6f5a-46a2-aa37-7fa5489911e7）
 
 ## 主な機能
 
