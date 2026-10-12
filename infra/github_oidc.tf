@@ -83,6 +83,23 @@ resource "aws_iam_role_policy" "github_deploy" {
         ]
       },
       {
+        # 入れ替えのとき、ECS が内部で行う操作（AWS の公式の説明「Automated deployments with GitHub Actions for
+        # Amazon ECS Express Mode」の権限の一覧のうち、入れ替えに使うもの）。このアプリの箱の設計図・サービス・クラスターだけに限る。
+        # 作る操作（CreateCluster、CreateExpressGatewayService）は、Terraform が行うので、CD には渡さない
+        Sid    = "EcsDeployInternals"
+        Effect = "Allow"
+        Action = [
+          "ecs:RegisterTaskDefinition",
+          "ecs:UpdateService",
+          "ecs:DescribeClusters",
+        ]
+        Resource = [
+          "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:task-definition/${var.app_name}-${var.app_name}:*",
+          aws_ecs_express_gateway_service.app.service_arn,
+          aws_ecs_cluster.main.arn,
+        ]
+      },
+      {
         # サービスを入れ替えるとき、ECS に、実行ロール・タスクロール・インフラロールを渡すための権限（この3つだけ）
         Sid      = "PassEcsRoles"
         Effect   = "Allow"

@@ -179,8 +179,14 @@ jobs:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           IMAGE="$REGISTRY/campfires:$GITHUB_SHA"
-          docker tag campfires:ci "$IMAGE"
-          docker push "$IMAGE"
+          # 同じ名前のイメージがすでにあれば（失敗した公開のやり直しなど）、上げ直さない。
+          # ECR は、同じ名前の上書きを禁止している（infra/ecr.tf）ため
+          if aws ecr describe-images --repository-name campfires --image-ids imageTag="$GITHUB_SHA" > /dev/null 2>&1; then
+            echo "すでに上がっているので、上げ直しません"
+          else
+            docker tag campfires:ci "$IMAGE"
+            docker push "$IMAGE"
+          fi
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
       - name: アプリを新しいイメージに入れ替え、終わるまで待つ（動かなければ、ECS が前のイメージに戻し、ここが失敗する）
         env:
