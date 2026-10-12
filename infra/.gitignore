@@ -1,0 +1,14 @@
+# 【役割】Terraform で、GitHub に上げないファイルの一覧。
+# 【なぜ必要か】Terraform の記録（state）には、作った AWS の部品の詳しい情報が入る。
+# 手元だけの設定（terraform.tfvars）には、メールアドレスなどの個人の情報を書く。どちらもリポジトリに入れない。
+
+# Terraform が取ってきた部品（プロバイダー）。terraform init で作り直せる
+.terraform/
+# 作った AWS の部品の記録（state）と、その控え
+*.tfstate
+*.tfstate.*
+# 手元だけの設定（メールアドレスなど）。見本は terraform.tfvars.example
+terraform.tfvars
+# 計画の保存ファイル、落ちたときの記録
+*.tfplan
+crash.log
