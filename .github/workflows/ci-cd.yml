@@ -1,0 +1,226 @@
+# 【役割】GitHub Actions の CI/CD（Issue #49）。
+# 【なぜ必要か】
+# - CI：PR を出すたび・main にマージするたびに、テスト・lint・ビルド・脆弱性と秘密の値の検査・E2E を自動で行い、壊れた変更に気づく
+# - CD：main にマージされ、CI がすべて通ったときだけ、CI で確かめたものと同じ Docker イメージを AWS に公開する
+#
+# 使っている部品（actions/〜 など）は、版の名前（タグ）ではなく、コミットの番号（SHA）で決めている。
+# タグは、あとから別の中身に付け替えられるおそれがあるため（すり替えの対策）。右のコメントが、その番号の版。
+# AWS へは、OIDC（GitHub が発行する一時的な身分証）でログインし、AWS のアクセスキーを GitHub に置かない（infra/github_oidc.tf）。
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 何もしなければ、リポジトリを読むだけの権限にする（必要な job だけ、権限を足す）
+permissions:
+  contents: read
+
+# 同じ PR で新しく push されたら、古い CI は止める（main への push は止めない）
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  AWS_REGION: ap-northeast-1
+
+jobs:
+  # ---------- バックエンド：単体テスト・結合テスト（Testcontainers の PostgreSQL も、GitHub 上の Docker で動く） ----------
+  backend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: テスト（./mvnw test）
+        working-directory: backend
+        run: ./mvnw -B -q test
+
+  # ---------- 画面：lint、ビルド、npm audit、本番のファイルに開発用のデータが入っていないこと ----------
+  frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - name: 脆弱性の検査（npm audit）
+        run: npm audit
+      - name: 本番のファイルに、開発用のデータと偽の API が入っていないこと
+        # grep が見つけたら（終了の番号 0）、失敗にする。! は「結果を逆にする」
+        run: '! grep -lE "campfire2026|owner@example.com|msw" dist/assets/*.js'
+
+  # ---------- 秘密の値の検査と、Terraform の書き方の確認 ----------
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: 秘密の値の検査（secretlint）
+        run: npx --yes @secretlint/quick-start@13.0.6 "**/*"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.15.7
+          terraform_wrapper: false
+      - name: Terraform の書き方の確認（AWS にはつながない）
+        working-directory: infra
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+
+  # ---------- 本番用の Docker イメージ：作る → 脆弱性の検査 → 動かして E2E ----------
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: イメージを作る
+        run: docker build -t campfires:ci .
+      - name: 脆弱性と秘密の値の検査（Trivy。1件でもあれば失敗。受け入れたものは .trivyignore.yaml）
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/.trivyignore.yaml:/ignore.yaml:ro" aquasec/trivy:0.75.0 \
+            image --quiet --exit-code 1 --scanners vuln,secret --ignorefile /ignore.yaml campfires:ci
+      - name: 本番用の箱を動かす（データベースと、アプリ。回数制限は本番と同じく On）
+        run: |
+          docker network create cf
+          docker run -d --name cf-db --network cf -e POSTGRES_DB=campfires -e POSTGRES_USER=campfires \
+            -e POSTGRES_PASSWORD=ci-only-password postgres:17
+          docker run -d --name cf-app --network cf -p 8081:8080 -e DB_HOST=cf-db -e DB_USERNAME=campfires \
+            -e DB_PASSWORD=ci-only-password -e DB_SSL_MODE=disable campfires:ci
+          # アプリが起動するまで待つ（最大3分）
+          # _ は「使わない変数」の名前
+          for _ in $(seq 1 60); do curl -sf http://localhost:8081/api/health && exit 0; sleep 3; done
+          docker logs cf-app; exit 1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: E2E（API とブラウザ。ブラウザは、GitHub の Linux に入っている Microsoft Edge）
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright test
+      - name: 失敗したときは、E2E の結果（画面の写真と記録）を残す
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7
+      - name: 公開に使うため、確かめたイメージをファイルにして残す（main のときだけ）
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker save campfires:ci | gzip > image.tar.gz
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: image
+          path: image.tar.gz
+          retention-days: 1
+
+  # ---------- CD：main にマージされ、上の4つがすべて通ったときだけ、AWS に公開する ----------
+  deploy:
+    needs: [backend, frontend, checks, image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    # 公開は1つずつ行う（続けてマージしても、前の公開が終わるまで待つ）
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      # OIDC の身分証を受け取るための権限
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: CI で確かめたイメージを読み込む
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: image
+      - run: gunzip -c image.tar.gz | docker load
+      - name: AWS にログインする（OIDC。main からだけ使える IAM ロール）
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          # このリポジトリは公開されていて、実行の記録（ログ）もだれでも見られる。AWS のアカウントの番号を、ログで伏せる
+          mask-aws-account-id: true
+      - name: ECR にログインする
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      - name: イメージを ECR に上げる（名前は、コミットの番号。どの変更が動いているか分かるように）
+        id: push
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          IMAGE="$REGISTRY/campfires:$GITHUB_SHA"
+          docker tag campfires:ci "$IMAGE"
+          docker push "$IMAGE"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+      - name: アプリを新しいイメージに入れ替え、終わるまで待つ（動かなければ、ECS が前のイメージに戻し、ここが失敗する）
+        env:
+          IMAGE: ${{ steps.push.outputs.image }}
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          SERVICE_ARN="arn:aws:ecs:$AWS_REGION:$ACCOUNT:service/campfires/campfires"
+          bash infra/scripts/deploy.sh "$SERVICE_ARN" "$IMAGE"
+          ENDPOINT=$(aws ecs describe-express-gateway-service --service-arn "$SERVICE_ARN" \
+            --query 'service.activeConfigurations[0].ingressPaths[0].endpoint' --output text)
+          echo "ENDPOINT=$ENDPOINT" >> "$GITHUB_ENV"
+      - name: ロードバランサーの守りの設定が効いていることを確かめる（読むだけ）
+        run: |
+          LB_ARN=$(aws resourcegroupstaggingapi get-resources --resource-type-filters elasticloadbalancing:loadbalancer \
+            --tag-filters Key=AmazonECSManaged,Values=true --query 'ResourceTagMappingList[0].ResourceARN' --output text)
+          DROP=$(aws elbv2 describe-load-balancer-attributes --load-balancer-arn "$LB_ARN" \
+            --query "Attributes[?Key=='routing.http.drop_invalid_header_fields.enabled'].Value" --output text)
+          DESYNC=$(aws elbv2 describe-load-balancer-attributes --load-balancer-arn "$LB_ARN" \
+            --query "Attributes[?Key=='routing.http.desync_mitigation_mode'].Value" --output text)
+          echo "drop_invalid_header_fields=$DROP desync_mitigation_mode=$DESYNC"
+          if [ "$DROP" != "true" ] || [ "$DESYNC" = "monitor" ]; then
+            echo "ロードバランサーの守りが外れています。infra/scripts/harden-alb.sh を実行してください" >&2
+            exit 1
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: 公開したアプリを、API の E2E で確かめる（テストのデータは、最後に消す）
+        working-directory: e2e
+        run: |
+          npm ci
+          E2E_BASE_URL="$ENDPOINT" npx playwright test --project=api
+      - name: 結果のまとめ
+        env:
+          IMAGE: ${{ steps.push.outputs.image }}
+        run: |
+          {
+            echo "## 公開しました"
+            echo "- イメージのタグ：\`$GITHUB_SHA\`"
+            echo "- URL：$ENDPOINT"
+          } >> "$GITHUB_STEP_SUMMARY"

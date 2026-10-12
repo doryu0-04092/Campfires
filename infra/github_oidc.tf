@@ -80,14 +80,26 @@ resource "aws_iam_role_policy" "github_deploy" {
         ]
       },
       {
-        # サービスを入れ替えるとき、ECS に実行ロールとインフラロールを渡すための権限（この2つだけ）
+        # サービスを入れ替えるとき、ECS に、実行ロール・タスクロール・インフラロールを渡すための権限（この3つだけ）
         Sid      = "PassEcsRoles"
         Effect   = "Allow"
         Action   = "iam:PassRole"
-        Resource = [aws_iam_role.execution.arn, aws_iam_role.infrastructure.arn]
+        Resource = [aws_iam_role.execution.arn, aws_iam_role.task.arn, aws_iam_role.infrastructure.arn]
         Condition = {
           StringEquals = { "iam:PassedToService" = ["ecs-tasks.amazonaws.com", "ecs.amazonaws.com"] }
         }
+      },
+      {
+        # 公開のあとに、ロードバランサーの守りの設定（scripts/harden-alb.sh）が効いているかを読んで確かめる（読むだけ）。
+        # ロードバランサーの「読む」操作と、タグで探す操作は、対象をしぼれない AWS の決まりなので "*"
+        Sid    = "CheckAlb"
+        Effect = "Allow"
+        Action = [
+          "tag:GetResources",
+          "elasticloadbalancing:DescribeLoadBalancerAttributes",
+          "elasticloadbalancing:DescribeListeners",
+        ]
+        Resource = "*"
       },
     ]
   })
