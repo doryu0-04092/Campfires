@@ -1,0 +1,7 @@
+# 【役割】ファイルの行末の文字（改行）を、Git がどう扱うかの決まり。
+# 【なぜ必要か】Windows の Git は、取り出したファイルの行末を CRLF に変える。
+# - Terraform：文字列（ログの検索の文など）に CR が入り、AWS の設定と食い違って、毎回「変わった」と表示される
+# - シェルスクリプト：GitHub Actions（Linux）の bash は、CR があると動かない
+# そのため、この2種類は、Windows でもいつも LF にする。
+*.tf text eol=lf
+*.sh text eol=lf

@@ -1,4 +1,7 @@
 # Campfires
+
+[![CI/CD](https://github.com/doryu0-04092/Campfires/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/doryu0-04092/Campfires/actions/workflows/ci-cd.yml)
+
 勉強会・コミュニティ運営のためのイベント申込み管理アプリ
 
 ## フォルダ
@@ -80,3 +83,17 @@ http://localhost:8081 を開きます。本番の設定では、開発用のデ�
 - ログを JSON で出し、API の呼び出しごとに1行のアクセスログを残す（[docs/observability.md](docs/observability.md)）
 
 この箱に対して、E2E テストを動かせます（[e2e/README.md](e2e/README.md)）。
+
+## CI/CD（GitHub Actions）
+
+`.github/workflows/ci-cd.yml` で、次の流れを自動で行います。
+
+| いつ | 何をするか |
+|---|---|
+| PR を出したとき・main にマージしたとき（CI） | バックエンドのテスト（`./mvnw test`）、画面の lint・ビルド・`npm audit`、秘密の値の検査（secretlint）、Terraform の書き方の確認、本番用の Docker イメージを作って脆弱性の検査（Trivy）、そのイメージを動かして E2E（API とブラウザ） |
+| main にマージされ、CI がすべて通ったとき（CD） | CI で確かめたイメージを ECR に上げ（名前はコミットの番号）、AWS のアプリを入れ替える。入れ替えが終わるまで待ち、ロードバランサーの守りの設定と、公開したアプリを API の E2E で確かめる |
+
+- AWS へは OIDC でログインします（AWS のアクセスキーを GitHub に置かない）。GitHub に登録する値は、Secret の `AWS_DEPLOY_ROLE_ARN`（`terraform output github_deploy_role_arn`）だけです
+- 新しいイメージが動かなかったときは、ECS が前のイメージに自動で戻し、CD は失敗になります
+- データベースのテーブルの変更（Flyway）は、アプリが起動したときに自動で行われます
+- 公開のたびに、本番で API の E2E を行います（テスト用の利用者を3人登録して、最後に消す）。本番の回数制限（登録は1時間に10回）があるので、**1時間に3回より多くマージしない**でください

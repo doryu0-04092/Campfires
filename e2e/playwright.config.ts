@@ -41,7 +41,8 @@ export default defineConfig({
       name: 'browser',
       testDir: './tests/browser',
       // パソコンに入っている Microsoft Edge を使う（ブラウザを別にダウンロードしなくてよい）
-      use: { channel: 'msedge', viewport: { width: 1280, height: 800 } },
+      // E2E_BROWSER_CHANNEL で変えられる（GitHub Actions の Linux にも Edge が入っているので、ふだんは変えなくてよい）
+      use: { channel: process.env.E2E_BROWSER_CHANNEL ?? 'msedge', viewport: { width: 1280, height: 800 } },
     },
   ],
 })
