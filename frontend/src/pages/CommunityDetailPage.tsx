@@ -15,6 +15,7 @@ import EventCard from '../components/EventCard'
 import { useAuth } from '../auth/useAuth'
 import formStyles from '../components/Form.module.css'
 import styles from '../components/List.module.css'
+import { returnToState } from '../utils/returnTo'
 import LoadError from '../components/LoadError'
 import { ROLE_LABELS, type CommunityDetail } from '../types/community'
 import { displayName } from '../types/user'
@@ -204,10 +205,19 @@ function MembershipActions({ community, onChanged }: { community: CommunityDetai
 
   // ログインしていない：ログインを案内する。ログインしたら、この画面に戻ってくる
   if (state.status !== 'authenticated') {
+    // 「参加を申請する」を押すと、ログインの画面に移る。ログインのあと、この画面に戻ってくる（utils/returnTo.ts）
     return (
-      <p className={styles.message}>
-        参加を申請するには、<Link to="/login" state={{ from: location }}>ログイン</Link>してください。
-      </p>
+      <>
+        <p className={styles.message}>参加を申請するには、ログインが必要です。ログインのあと、この画面に戻ります。</p>
+        <div className={styles.actions}>
+          <Link to="/login" state={returnToState(location)} className={`${styles.button} ${styles.buttonPrimary}`}>
+            参加を申請する
+          </Link>
+          <Link to="/signup" state={returnToState(location)} className={styles.button}>
+            アカウント登録
+          </Link>
+        </div>
+      </>
     )
   }
 

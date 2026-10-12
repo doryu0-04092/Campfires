@@ -4,6 +4,8 @@
  * 【なぜ必要か】自動テスト（./mvnw test）は、アプリの中だけで確かめる。本番では、その前にロードバランサーや
  * 本番の設定（application-prod.properties）があるので、本物の通り道で、守りが効いているかを確かめるため。
  */
+import crypto from 'node:crypto'
+
 import { expect, test } from '@playwright/test'
 
 import { ApiSession } from '../../support/api'
@@ -105,7 +107,8 @@ test.describe('API の土台', () => {
   test('ログインの Cookie に守りが付いている', async () => {
     const session = await ApiSession.create()
     // 登録されていないメールアドレスでログインして、失敗の返事を見る（Cookie は、成功したときだけ作られる）
-    const failed = await session.post('/api/auth/login', { email: 'nobody@example.com', password: 'wrong-password' })
+    // メールアドレスは、実行ごとに変える（同じアドレスで失敗を続けると、5回目でロックされ、何度も動かすうちに 429 になるため）
+    const failed = await session.post('/api/auth/login', { email: `nobody-${crypto.randomUUID()}@example.com`, password: 'wrong-password' })
     expect(failed.status()).toBe(401)
     await session.dispose()
 

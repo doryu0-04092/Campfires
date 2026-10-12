@@ -2,7 +2,69 @@
 
 [![CI/CD](https://github.com/doryu0-04092/Campfires/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/doryu0-04092/Campfires/actions/workflows/ci-cd.yml)
 
-勉強会・コミュニティ運営のためのイベント申込み管理アプリ
+勉強会・コミュニティ運営のためのイベント申込み管理アプリです。
+コミュニティを作り、メンバーを集め、イベントの参加者を募集し、申込みを管理できます。
+
+**公開している URL：** https://ca-9b0f538e8d494616982abeb2dcb41aa5.ecs.ap-northeast-1.on.aws
+
+## デモ動画
+
+ログインしていない「さくら」が、オーナー「ゆうき」のイベントを見つけてログインし、申し込みます。ゆうきが、そのさくらの申込みを承認し、新しいイベントを作るまでの流れです（約2分）。
+
+<!-- ↓ 次の1行を、動画の URL（https://github.com/user-attachments/assets/…）に置き換える。URL だけを1行で書き、前後の空いた行は残す -->
+
+https://github.com/user-attachments/assets/3625fd82-6f5a-46a2-aa37-7fa5489911e7
+
+## 主な機能
+
+| だれが | できること |
+|---|---|
+| ログインしていない人 | イベント・コミュニティの検索と、詳細を見る。「申し込む」を押すとログインの画面へ移り、ログインのあと、元の画面に戻る |
+| 利用者（ログインした人） | イベントに申し込む・取り消す（満席ならキャンセル待ち。空きが出たら自動で繰り上がる）、コミュニティへの参加の申請、参加予定のイベントの一覧、お知らせ、ニックネーム・パスワードの変更、退会 |
+| オーナー・運営スタッフ | コミュニティの作成・編集・アーカイブ、参加の申請の承認、メンバー管理（運営スタッフの任命・除名）、イベントの作成・編集・削除、申込者の一覧と、申込みの承認・却下 |
+
+イベントごとに、参加の承認の方法（自動・手動）を、メンバーとメンバー以外で選べます。定員は、同時にたくさんの申込みが来ても超えないようにしています。
+
+## 使っている技術
+
+| 分野 | 技術 |
+|---|---|
+| 画面 | React 19、TypeScript、Vite、React Router |
+| API | Java 21、Spring Boot 4、Spring Security、MyBatis、Flyway |
+| データベース | PostgreSQL 17 |
+| インフラ | AWS（ECS Express Mode・Fargate、RDS、Secrets Manager、ECR）、Terraform |
+| CI/CD | GitHub Actions（テストがすべて通ったときだけ、自動で公開） |
+| テスト | JUnit 5・Testcontainers（393件）、Playwright の E2E（292件。Edge・Firefox・WebKit・スマートフォン・アクセシビリティ）、k6 の負荷テスト |
+| 見張り | CloudWatch（ログ・数字・アラーム）、AWS X-Ray（トレース。OpenTelemetry） |
+
+## 構成
+
+```
+[ブラウザ]  React の画面
+    │  HTTPS
+    ▼
+[ロードバランサー]  AWS（ECS Express Mode が作る）
+    │
+    ▼
+[アプリ]  Spring Boot（画面のファイルと API を、1つの Docker イメージで返す。ECS Fargate）
+    │  暗号化した接続
+    ▼
+[データベース]  PostgreSQL（Amazon RDS）
+```
+
+## 文書
+
+| 文書 | 中身 |
+|---|---|
+| [要件定義書](docs/requirements.md) | 機能と業務のルール |
+| [画面一覧](docs/screens.md) | 画面と URL |
+| [API 仕様書](docs/api/README.md) | API の決まりと一覧（OpenAPI） |
+| [非機能要件](docs/non-functional-requirements.md) | 性能・セキュリティ・運用の目標と、確かめた結果 |
+| [セキュリティ](docs/security.md) | 見直しの結果と、受け入れたリスク |
+| [オブザーバビリティ](docs/observability.md) | ログ・メトリクス・トレース |
+| [障害のときの手順書](docs/runbook.md) | 復旧の手順と、練習の結果 |
+| [技術構成](docs/tech-stack.md) | 技術を選んだ理由 |
+
 
 ## フォルダ
 

@@ -6,6 +6,8 @@
  * - アカウント登録（同意しないと押せない → 登録するとログインした状態になる）
  * - ログアウト
  * - パスワードが違うとき、エラーが出る
+ * - ログインしていない人がイベントの「申し込む」を押すと、ログインのあと、そのイベントの画面に戻る
+ * - 上の「ログイン」を押すと、ログインのあと、元の画面（検索の言葉も）に戻る
  * - ログインが必要な画面から来た人は、ログインのあと、元の画面に戻る
  * - アカウント設定で、ニックネームを変える
  * - アカウント設定で、パスワードを変える（変えた後も、この端末はログインしたまま）
@@ -20,8 +22,8 @@
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
-import { forget, newAccountData, remember } from '../../support/accounts'
-import { header, main } from './helpers'
+import { forget, newAccountData, remember, sessionOf, tag } from '../../support/accounts'
+import { createCommunityViaApi, createEventViaApi, header, main } from './helpers'
 
 // serial：このファイルのテストを、書いた順に1つずつ行う。1つ失敗したら、残りは行わない
 test.describe.configure({ mode: 'serial' })
@@ -40,10 +42,20 @@ let currentNickname: string
 let context: BrowserContext
 let page: Page
 
+// 「申し込む」を押してログインする流れで使う、イベント（owner が API で作る。メンバー以外も申し込める）
+let communityId: number
+let eventId: number
+let eventTitle: string
+
 // 【何のため】ファイルの最初に、ログインしていないブラウザを1つ開く
 test.beforeAll(async ({ browser }) => {
   extra = newAccountData('extra', 'ui')
   currentNickname = extra.nickname
+  const owner = await sessionOf('owner')
+  eventTitle = `E2E ログインして戻る ${tag()}`
+  communityId = await createCommunityViaApi(owner, `E2E 戻り先のコミュニティ ${tag()}`)
+  eventId = await createEventViaApi(owner, communityId, { title: eventTitle, nonMemberApproval: 'auto' })
+  await owner.dispose()
   context = await browser.newContext()
   page = await context.newPage()
 })
@@ -104,6 +116,45 @@ test('パスワードが違うと、ログインできず、エラーが出る',
   // role="alert" の場所に、エラーの文が出る
   await expect(main(page).getByRole('alert')).toBeVisible()
   await expect(page).toHaveURL('/login')
+  await expect(header(page).getByRole('link', { name: 'ログイン' })).toBeVisible()
+})
+
+/** 【何のため】ログインの画面で、extra のメールアドレスとパスワードを入れてログインする */
+async function loginOnPage() {
+  await expect(page).toHaveURL('/login')
+  await page.getByLabel('メールアドレス').fill(extra.email)
+  await page.getByLabel('パスワード', { exact: true }).fill(extra.password)
+  await page.getByRole('button', { name: 'ログイン' }).click()
+  await expect(header(page).getByText(`${currentNickname} さん`)).toBeVisible()
+}
+
+test('ログインしていない人が「申し込む」を押すと、ログインのあと、そのイベントの画面に戻る', async () => {
+  // 【何のため】イベントを見つけた人が、ログインのあとに探し直さなくても、そのまま申し込めることを確かめる
+  await page.goto(`/communities/${communityId}/events/${eventId}`)
+  await expect(main(page).getByText('申し込むには、ログインが必要です。')).toBeVisible()
+  // ログインしていないときの「申し込む」は、ログインの画面へのリンク
+  await main(page).getByRole('link', { name: '申し込む' }).click()
+  await loginOnPage()
+  await expect(page).toHaveURL(`/communities/${communityId}/events/${eventId}`)
+  // 戻ってきた画面では、本当に申し込めるボタンになっている
+  await expect(main(page).getByRole('button', { name: '申し込む', exact: true })).toBeVisible()
+
+  await header(page).getByRole('button', { name: 'ログアウト' }).click()
+  await expect(header(page).getByRole('link', { name: 'ログイン' })).toBeVisible()
+})
+
+test('上の「ログイン」を押すと、ログインのあと、元の画面（検索の言葉も）に戻る', async () => {
+  // 【何のため】検索の結果を見ている途中でログインしても、同じ検索の結果に戻れることを確かめる
+  const query = encodeURIComponent(eventTitle)
+  await page.goto(`/?q=${query}`)
+  await expect(main(page).getByRole('link', { name: eventTitle })).toBeVisible()
+  await header(page).getByRole('link', { name: 'ログイン' }).click()
+  await loginOnPage()
+  // toHaveURL に関数を渡すと、URL を受け取って「正しいか」を確かめられる。トップ（/）で、検索の言葉（q）がそのまま残っている
+  await expect(page).toHaveURL((url) => url.pathname === '/' && url.searchParams.get('q') === eventTitle)
+  await expect(main(page).getByRole('link', { name: eventTitle })).toBeVisible()
+
+  await header(page).getByRole('button', { name: 'ログアウト' }).click()
   await expect(header(page).getByRole('link', { name: 'ログイン' })).toBeVisible()
 })
 
