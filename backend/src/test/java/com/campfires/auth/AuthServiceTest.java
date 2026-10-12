@@ -53,7 +53,7 @@ class AuthServiceTest {
     }
 
     private static User user() {
-        return new User(1, "山田 太郎", "たろう", "taro@example.com", "real-hash", null, Instant.EPOCH);
+        return new User(1, "山田 太郎", "たろう", "taro@example.com", "real-hash", null, Instant.EPOCH, null);
     }
 
     /**

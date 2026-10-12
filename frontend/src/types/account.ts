@@ -57,3 +57,38 @@ export type UpdateMeRequest = {
 export type DeleteMeRequest = {
   password: string
 }
+
+/**
+ * 【何のため】パスワードを変えるときに送るデータ（PUT /api/me/password）の形。本人の確認のため、今のパスワードも送る。
+ */
+export type ChangePasswordRequest = {
+  // 今のパスワード
+  currentPassword: string
+  // 新しいパスワード（8〜64文字、半角の英字・数字・記号。アカウント登録と同じルール）
+  newPassword: string
+}
+
+/**
+ * 【何のため】パスワードの再設定を依頼するときに送るデータ（POST /api/auth/password-reset-requests）の形。
+ */
+export type PasswordResetRequest = {
+  email: string
+}
+
+/**
+ * 【何のため】パスワードの再設定（新しいパスワードを決める）のときに送るデータ（POST /api/auth/password-resets）の形。
+ */
+export type PasswordResetConfirmRequest = {
+  // 再設定のリンク（メール）に入っていた、使い捨ての合言葉
+  token: string
+  // 新しいパスワード（アカウント登録と同じルール）
+  newPassword: string
+}
+
+/**
+ * 【何のため】今使える機能の一覧（GET /api/auth/features の返事）の形。
+ */
+export type AuthFeatures = {
+  // パスワードの再設定（パスワードを忘れた場合）を使えるか。メールを送る仕組みがない本番では false
+  passwordResetEnabled: boolean
+}

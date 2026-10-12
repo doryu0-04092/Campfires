@@ -4,7 +4,17 @@
  * URL と返事の形は、API 仕様書（docs/api/openapi.yaml）の auth と account に合わせている。
  */
 
-import type { DeleteMeRequest, LoginRequest, Me, SignupRequest, UpdateMeRequest } from '../types/account'
+import type {
+  AuthFeatures,
+  ChangePasswordRequest,
+  DeleteMeRequest,
+  LoginRequest,
+  Me,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+  SignupRequest,
+  UpdateMeRequest,
+} from '../types/account'
 import { ApiError, apiRequest } from './client'
 
 /**
@@ -69,4 +79,38 @@ export async function updateMe(request: UpdateMeRequest): Promise<Me> {
  */
 export async function deleteMe(request: DeleteMeRequest): Promise<void> {
   await apiRequest<void>('/api/me', { method: 'DELETE', body: request })
+}
+
+/**
+ * 【何のため】パスワードを変更する（PUT /api/me/password）。
+ * 成功すると、サーバーがセッションを作り直す（ほかの端末のログインは使えなくなり、この端末はログインしたまま）。
+ * 失敗したときは ApiError を投げる（code は INVALID_PASSWORD、VALIDATION_ERROR など）。
+ */
+export async function changePassword(request: ChangePasswordRequest): Promise<void> {
+  await apiRequest<void>('/api/me/password', { method: 'PUT', body: request })
+}
+
+/**
+ * 【何のため】今使える機能の一覧を取得する（GET /api/auth/features）。ログインしていなくても呼べる。
+ * 「パスワードを忘れた場合」のリンクを出すかどうかを決めるために使う。
+ */
+export async function fetchAuthFeatures(signal?: AbortSignal): Promise<AuthFeatures> {
+  return apiRequest<AuthFeatures>('/api/auth/features', { signal })
+}
+
+/**
+ * 【何のため】パスワードの再設定を依頼する（POST /api/auth/password-reset-requests）。
+ * 登録されていても、いなくても、同じ返事（202）になる（登録されているメールアドレスを探られないように）。
+ * 再設定を止めているときは ApiError（503、PASSWORD_RESET_UNAVAILABLE）を投げる。
+ */
+export async function requestPasswordReset(request: PasswordResetRequest): Promise<void> {
+  await apiRequest<{ message: string }>('/api/auth/password-reset-requests', { method: 'POST', body: request })
+}
+
+/**
+ * 【何のため】リンクのトークンと新しいパスワードで、パスワードを決め直す（POST /api/auth/password-resets）。
+ * 失敗したときは ApiError を投げる（code は INVALID_RESET_TOKEN、VALIDATION_ERROR、PASSWORD_RESET_UNAVAILABLE）。
+ */
+export async function resetPassword(request: PasswordResetConfirmRequest): Promise<void> {
+  await apiRequest<void>('/api/auth/password-resets', { method: 'POST', body: request })
 }

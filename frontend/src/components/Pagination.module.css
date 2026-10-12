@@ -32,7 +32,10 @@
   font-weight: bold;
 }
 
-/* 押せないボタン（1ページ目の「前へ」など）：薄くする */
+/* 押せないボタン（1ページ目の「前へ」など）：補足の文字色と点線の枠で、押せないことを表す。
+   以前は全体を薄く（opacity: 0.4）していたが、文字と背景の色の差が足りなかった（WCAG 2.2 AA。E2E のアクセシビリティの確認で発見） */
 .disabled {
-  opacity: 0.4;
+  color: var(--text-muted);
+  border-style: dashed;
+  cursor: default;
 }

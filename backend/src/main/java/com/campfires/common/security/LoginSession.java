@@ -15,6 +15,7 @@ import com.campfires.common.observability.AccessLogFilter;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 /**
  * 【役割】ログインした状態を始める・終わらせる処理をまとめたクラス。
@@ -55,6 +56,25 @@ public class LoginSession {
         securityContextRepository.saveContext(context, request, response);
         // アクセスログ（AccessLogFilter）に、ログインした人の番号を残すため
         request.setAttribute(AccessLogFilter.USER_ID_ATTRIBUTE, userId);
+    }
+
+    /**
+     * 【何のため】今のセッションを捨てて、新しいセッションでログインし直す（パスワードを変えたときに使う）。
+     *
+     * パスワードを変えると、変えた日時より前に作られたセッションは、すべて使えなくなる（ActiveUserFilter）。
+     * start() のように番号だけを作り直す（changeSessionId）と、セッションを作った日時は古いまま残るので、
+     * 操作した本人まで、次の呼び出しでログアウトされてしまう。そこで、セッションそのものを捨てて（invalidate）作り直す。
+     * 新しいセッションは、変えた日時より後に作られるので、使い続けられる。番号も新しくなるので、セッション固定攻撃の対策にもなる。
+     */
+    public void restart(long userId, HttpServletRequest request, HttpServletResponse response) {
+        HttpSession oldSession = request.getSession(false);
+        if (oldSession != null) {
+            oldSession.invalidate();
+        }
+        // 古いセッションのログインの情報も消してから、新しいセッションでログインした状態にする
+        // （start() の中で、セッションがないので新しく作られる）
+        SecurityContextHolder.clearContext();
+        start(userId, request, response);
     }
 
     /**

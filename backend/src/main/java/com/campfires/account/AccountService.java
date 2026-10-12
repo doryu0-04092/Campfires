@@ -1,35 +1,46 @@
 package com.campfires.account;
 
+import java.time.Instant;
+import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.campfires.auth.PasswordResetTokenMapper;
+import com.campfires.common.security.PasswordChangeClock;
 import com.campfires.common.web.ApiException;
+import com.campfires.common.web.FieldErrorItem;
 import com.campfires.event.ApplicationCancelService;
 
 /**
  * 【役割】自分のアカウント（/api/me）の、業務の処理をするクラス。
- * 【なぜ必要か】情報の取得、ニックネームの変更、アカウントの削除（要件定義書 5.5、5.6）のルールを、1か所にまとめるため。
+ * 【なぜ必要か】情報の取得、ニックネームの変更、パスワードの変更、アカウントの削除（要件定義書 5.5、5.6、5.13）のルールを、
+ * 1か所にまとめるため。
  */
 @Service
 public class AccountService {
 
-    // アカウントの削除を、ログに残す（あとから、いつ削除されたかを調べられるようにするため）
+    // アカウントの削除とパスワードの変更を、ログに残す（あとから、いつ行われたかを調べられるようにするため）。
+    // パスワードは、ログに出さない
     private static final Logger log = LoggerFactory.getLogger(AccountService.class);
 
     private final UserMapper userMapper;
     private final AccountMapper accountMapper;
     private final ApplicationCancelService applicationCancelService;
     private final PasswordEncoder passwordEncoder;
+    private final PasswordResetTokenMapper passwordResetTokenMapper;
 
     public AccountService(UserMapper userMapper, AccountMapper accountMapper,
-            ApplicationCancelService applicationCancelService, PasswordEncoder passwordEncoder) {
+            ApplicationCancelService applicationCancelService, PasswordEncoder passwordEncoder,
+            PasswordResetTokenMapper passwordResetTokenMapper) {
         this.userMapper = userMapper;
         this.accountMapper = accountMapper;
         this.applicationCancelService = applicationCancelService;
         this.passwordEncoder = passwordEncoder;
+        this.passwordResetTokenMapper = passwordResetTokenMapper;
     }
 
     /**
@@ -49,6 +60,34 @@ public class AccountService {
         requireActive(userMapper.findById(userId));
         userMapper.updateNickname(userId, nickname);
         return userMapper.findById(userId);
+    }
+
+    /**
+     * 【何のため】パスワードを変える（F-24、要件定義書 5.13）。本人の確認のため、今のパスワードも確かめる。
+     * 変えた日時（passwordChangedAt）を記録するので、それより前に作られたセッション（ほかの端末のログイン）は、
+     * 次の API の呼び出しで使えなくなる（ActiveUserFilter）。操作した端末は、Controller が新しいセッションに作り直す。
+     */
+    @Transactional
+    public void changePassword(long userId, String currentPassword, String newPassword) {
+        // ユーザーの行をロックして、同じアカウントのパスワードの変更・削除が、同時に行われないようにする
+        User user = requireActive(userMapper.findByIdForUpdate(userId));
+
+        // 本人の確認のため、今のパスワードを確かめる（アカウントの削除と同じ形のエラー）
+        if (!passwordEncoder.matches(currentPassword, user.passwordHash())) {
+            throw ApiException.badRequest("INVALID_PASSWORD", "currentPassword", "今のパスワードが正しくありません。");
+        }
+        // 今と同じパスワードには変えられない（今のパスワードは、上で一致を確かめたので、文字を比べるだけでよい）
+        if (newPassword.equals(currentPassword)) {
+            throw ApiException.validation(
+                    List.of(new FieldErrorItem("newPassword", "今のパスワードと違うパスワードを入力してください。")));
+        }
+
+        // 変えた日時は、セッションを作った日時と同じ時計・同じ細かさ（ミリ秒）で決める（理由は PasswordChangeClock）
+        Instant changedAt = PasswordChangeClock.now();
+        userMapper.updatePassword(userId, passwordEncoder.encode(newPassword), changedAt);
+        // まだ使っていない、パスワードの再設定のリンクは、使えなくする（古いリンクで、パスワードを戻されないように）
+        passwordResetTokenMapper.invalidateUnusedByUserId(userId);
+        log.atInfo().addKeyValue("event", "password_changed").addKeyValue("userId", userId).log("パスワードを変更しました");
     }
 
     /**
@@ -82,6 +121,8 @@ public class AccountService {
         accountMapper.rejectPendingJoinRequests(userId);
         // 開催前のイベントへの申込みを、すべて取り消す（繰り上げとお知らせも、ルールどおりに行われる）
         applicationCancelService.cancelUpcomingApplications(userId, userId, null);
+        // パスワードの再設定のトークンを消す（削除したアカウントのリンクが、残らないように）
+        passwordResetTokenMapper.deleteByUserId(userId);
         // 個人情報を消し、行だけを残す（過去の申込みの記録に「退会したユーザー」と表示するため）
         userMapper.markDeleted(userId);
         log.atInfo().addKeyValue("event", "account_deleted").addKeyValue("userId", userId).log("アカウントを削除しました");

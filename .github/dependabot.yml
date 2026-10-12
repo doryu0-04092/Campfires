@@ -1,0 +1,59 @@
+# 【役割】Dependabot（GitHub が、使っている部品の新しい版や脆弱性を見つけて、PR を作ってくれる仕組み）の設定。
+# 【なぜ必要か】非機能要件の「既知の重大な脆弱性を放置しない（npm audit、GitHub の Dependabot で確認する）」を満たすため。
+# 部品が古くなったり、脆弱性が見つかったりしたら、版を上げる PR が自動で作られる。PR では CI がすべて動くので、壊れる変更は入らない。
+#
+# cooldown：公開されてから 14日たった版だけを提案する（できたばかりの版は、すり替えや不具合のおそれがあるため。
+# このリポジトリの決まり「公開から2週間以上たった版を使う」と同じ）。脆弱性の修正の PR は、待たずにすぐ作られる。
+# groups：小さな版の上げ（minor、patch）は、まとめて1つの PR にする（PR が増えすぎないように）。
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      frontend-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      e2e-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      backend-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+
+  - package-ecosystem: terraform
+    directory: /infra
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14

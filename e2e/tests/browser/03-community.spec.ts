@@ -18,7 +18,7 @@
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
-import { account, runId, sessionOf } from '../../support/accounts'
+import { account, tag, sessionOf } from '../../support/accounts'
 import { json } from '../../support/api'
 import { acceptNextDialog, main, openPageAs } from './helpers'
 
@@ -39,8 +39,8 @@ const contexts: BrowserContext[] = []
 
 // 【何のため】オーナー・メンバー・メンバー以外の3人のブラウザを開いておく
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
-  firstName = `E2E 作成コミュニティ ${runId()}`
-  editedName = `E2E 編集後コミュニティ ${runId()}`
+  firstName = `E2E 作成コミュニティ ${tag()}`
+  editedName = `E2E 編集後コミュニティ ${tag()}`
   memberName = account('member').nickname
   outsiderName = account('outsider').nickname
   for (const role of ['owner', 'member', 'outsider'] as const) {

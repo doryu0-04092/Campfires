@@ -17,12 +17,13 @@
             <arg column="password_hash" name="passwordHash" javaType="String"/>
             <arg column="deleted_at" name="deletedAt" javaType="java.time.Instant"/>
             <arg column="created_at" name="createdAt" javaType="java.time.Instant"/>
+            <arg column="password_changed_at" name="passwordChangedAt" javaType="java.time.Instant"/>
         </constructor>
     </resultMap>
 
     <!-- 何度も使う列の一覧。<include refid="columns"/> で埋め込む -->
     <sql id="columns">
-        id, real_name, nickname, email, password_hash, deleted_at, created_at
+        id, real_name, nickname, email, password_hash, deleted_at, created_at, password_changed_at
     </sql>
 
     <select id="findById" resultMap="user">
@@ -52,6 +53,15 @@
 
     <update id="updateNickname">
         UPDATE users SET nickname = #{nickname} WHERE id = #{id} AND deleted_at IS NULL
+    </update>
+
+    <!--
+      パスワードを変える（変更と再設定の両方で使う）。変えた日時は、アプリ（Java）の時計の日時を受け取って入れる
+      （データベースの now() は使わない。セッションを作った日時と同じ時計で比べるため。PasswordChangeClock）
+    -->
+    <update id="updatePassword">
+        UPDATE users SET password_hash = #{passwordHash}, password_changed_at = #{passwordChangedAt}
+        WHERE id = #{id} AND deleted_at IS NULL
     </update>
 
     <update id="markDeleted">

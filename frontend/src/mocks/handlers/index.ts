@@ -10,10 +10,12 @@ import { authHandlers } from './auth'
 import { communityHandlers } from './communities'
 import { eventHandlers } from './events'
 import { notificationHandlers } from './notifications'
+import { passwordResetHandlers } from './passwordReset'
 
 // ... は「一覧の中身を、ここに並べる」という書き方。分野ごとの一覧をつなげて1つにしている
 export const handlers = [
   ...authHandlers,
+  ...passwordResetHandlers,
   ...accountHandlers,
   ...communityHandlers,
   ...eventHandlers,

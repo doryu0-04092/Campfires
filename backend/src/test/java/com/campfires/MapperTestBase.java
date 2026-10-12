@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 直接確かめるため。テストのデータを SQL で作る道具を、ここにまとめる。
  *
  * - @Import(TestcontainersConfiguration.class) と @SpringBootTest で、Docker の本物の PostgreSQL を使う。
- *   Flyway のマイグレーション（V1〜V3）も、起動のときに実行される。
+ *   Flyway のマイグレーション（V1〜V4）も、起動のときに実行される。
  *   BackendApplicationTests と同じ設定なので、Spring の起動は1回で済む（テストどうしで使い回される）。
  * - @Transactional を付けると、テストが終わったときに、テストで作ったデータが自動で取り消される（ロールバック）。
  *   そのため、ほかのテストのデータと混ざりにくい。

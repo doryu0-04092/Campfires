@@ -1,5 +1,7 @@
 package com.campfires.auth;
 
+import com.campfires.common.validation.ValidPassword;
+
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -36,10 +38,8 @@ public record SignupRequest(
         @Pattern(regexp = "^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", message = "メールアドレスの形が正しくありません。")
         String email,
 
-        @NotNull(message = "パスワードは8〜64文字にしてください。")
-        @Size(min = 8, max = 64, message = "パスワードは8〜64文字にしてください。")
-        // \x21-\x7E は、半角の英字・数字・記号（空白を除く）の範囲
-        @Pattern(regexp = "^[\\x21-\\x7E]*$", message = "パスワードには、半角の英字・数字・記号だけを使ってください。")
+        // パスワードのルール（8〜64文字、半角の英字・数字・記号だけ）。パスワードの変更・再設定と同じルールを使う
+        @ValidPassword
         String password,
 
         @NotNull(message = "プライバシーポリシーと利用規約に同意してください。")

@@ -9,12 +9,12 @@
  */
 import { expect, test } from '@playwright/test'
 
-import { account, runId, sessionOf, storageStatePath } from '../../support/accounts'
+import { account, tag, sessionOf, browserStatePath } from '../../support/accounts'
 import { json } from '../../support/api'
 import { createCommunityViaApi, createEventViaApi, joinViaApi, main } from './helpers'
 
 // このファイルのテストは、メンバーとしてログインした状態で行う
-test.use({ storageState: storageStatePath('member') })
+test.use({ storageState: browserStatePath('member') })
 
 let memberCommunityName: string
 let staffCommunityName: string
@@ -24,9 +24,9 @@ let eventId: number
 
 // 【何のため】メンバーとして参加するコミュニティ、運営スタッフをするコミュニティ、申し込むイベントを、API で用意する
 test.beforeAll(async () => {
-  memberCommunityName = `E2E 参加中コミュニティ ${runId()}`
-  staffCommunityName = `E2E スタッフ中コミュニティ ${runId()}`
-  eventTitle = `E2E 参加予定イベント ${runId()}`
+  memberCommunityName = `E2E 参加中コミュニティ ${tag()}`
+  staffCommunityName = `E2E スタッフ中コミュニティ ${tag()}`
+  eventTitle = `E2E 参加予定イベント ${tag()}`
   const owner = await sessionOf('owner')
   const member = await sessionOf('member')
   try {

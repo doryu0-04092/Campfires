@@ -18,6 +18,8 @@ import java.time.Instant;
  * @param passwordHash パスワードを BCrypt で変換した値（元のパスワードには戻せない）
  * @param deletedAt    アカウントを削除した日時。削除していなければ null
  * @param createdAt    登録した日時
+ * @param passwordChangedAt 最後にパスワードを変えた日時（変更・再設定）。一度も変えていなければ null。
+ *                          これより前に作られたセッションは、ActiveUserFilter が使えなくする
  */
 public record User(
         long id,
@@ -26,5 +28,6 @@ public record User(
         String email,
         String passwordHash,
         Instant deletedAt,
-        Instant createdAt) {
+        Instant createdAt,
+        Instant passwordChangedAt) {
 }

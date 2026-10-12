@@ -12,3 +12,5 @@ terraform.tfvars
 # 計画の保存ファイル、落ちたときの記録
 *.tfplan
 crash.log
+# Terraform の記録を置く S3 のバケットの名前（アカウントの番号が入るため）
+backend.hcl

@@ -8,7 +8,7 @@
  */
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
-import { account, sessionOf, storageStatePath, type Role } from '../../support/accounts'
+import { account, sessionOf, browserStatePath, type Role } from '../../support/accounts'
 import { ApiSession, eventInput, json } from '../../support/api'
 
 /** 【何のため】API でコミュニティを作り、その番号（id）を返す（作った人がオーナーになる） */
@@ -69,7 +69,7 @@ export function localDateTime(days: number, hour: number): string {
  */
 export async function openPageAs(browser: Browser, role: Role): Promise<{ context: BrowserContext; page: Page }> {
   // storageState：保存しておいたログインの Cookie を入れた状態で、ブラウザを始める
-  const context = await browser.newContext({ storageState: storageStatePath(role) })
+  const context = await browser.newContext({ storageState: browserStatePath(role) })
   const page = await context.newPage()
   return { context, page }
 }

@@ -28,6 +28,18 @@ export type LoginFailure = {
 }
 
 /**
+ * 【何のため】パスワードの再設定のトークン（要件定義書 5.13）。
+ * 本物は、トークンを SHA-256 で変換した値だけを保存するが、偽物は、分かりやすさのため、トークンをそのままキーにする。
+ */
+export type PasswordResetToken = {
+  userId: number
+  // 有効期限（ミリ秒）
+  expiresAt: number
+  // 使った・無効にした日時（ミリ秒）。まだ使えるなら null
+  usedAt: number | null
+}
+
+/**
  * 【何のため】偽のデータベース全体の形。
  */
 export type MockDb = {
@@ -40,6 +52,8 @@ export type MockDb = {
   notifications: MockNotification[]
   // メールアドレスごとの、ログインの失敗の記録。Map は「名前（キー）と値の組」をしまう入れ物
   loginFailures: Map<string, LoginFailure>
+  // トークン → パスワードの再設定のトークンの情報
+  passwordResetTokens: Map<string, PasswordResetToken>
 }
 
 /**
@@ -65,6 +79,38 @@ function createDb(): MockDb {
     applications,
     notifications,
     loginFailures: new Map(),
+    passwordResetTokens: loadPasswordResetTokens(),
+  }
+}
+
+// パスワードの再設定のトークンを、ブラウザの sessionStorage（タブを閉じるまで残る入れ物）に置くときの名前
+const RESET_TOKENS_KEY = 'mockPasswordResetTokens'
+
+/**
+ * 【何のため】sessionStorage から、パスワードの再設定のトークンを読み込む。
+ * 偽のデータベースは、ページを読み込み直すと最初の状態に戻る。再設定のリンクを開くと、ページ全体を読み込み直すので、
+ * トークンだけは sessionStorage に置いて、リンクを開いた後も使えるようにする（偽の API だけの工夫）。
+ * 読めないとき（ブラウザの設定で使えないなど）は、空の入れ物にする。
+ */
+function loadPasswordResetTokens(): Map<string, PasswordResetToken> {
+  try {
+    const saved = sessionStorage.getItem(RESET_TOKENS_KEY)
+    // JSON.parse で、保存した文字を [トークン, 情報] の組の一覧に戻し、Map にする
+    return new Map(saved ? (JSON.parse(saved) as [string, PasswordResetToken][]) : [])
+  } catch {
+    return new Map()
+  }
+}
+
+/**
+ * 【何のため】パスワードの再設定のトークンを、sessionStorage に保存する（トークンを作った・使ったときに呼ぶ）。
+ */
+export function savePasswordResetTokens(): void {
+  try {
+    // [...map] は、Map を [キー, 値] の組の一覧に変える書き方
+    sessionStorage.setItem(RESET_TOKENS_KEY, JSON.stringify([...db.passwordResetTokens]))
+  } catch {
+    // 保存できなくても、偽の API は動き続ける（ページを読み込み直すと、トークンが消えるだけ）
   }
 }
 

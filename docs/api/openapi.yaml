@@ -22,9 +22,9 @@ servers:
 # API のまとまり。各 API に、どのまとまりかを付ける。ツールの画面では、まとまりごとに並ぶ
 tags:
   - name: auth
-    description: アカウント登録、ログイン、ログアウト
+    description: アカウント登録、ログイン、ログアウト、使える機能の一覧、パスワードの再設定
   - name: account
-    description: 自分のアカウント（アカウント設定、ニックネームの変更、アカウント削除）
+    description: 自分のアカウント（アカウント設定、ニックネームの変更、パスワードの変更、アカウント削除）
   - name: communities
     description: コミュニティ（一覧、詳細、作成、編集、削除）
   - name: members
@@ -150,6 +150,111 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/auth/features:
+    get:
+      operationId: getAuthFeatures
+      summary: ログインまわりで、今使える機能の一覧を取得する（S-03、S-20）
+      description: |
+        パスワードの再設定（F-25）を使えるかどうかを返します。ログインしていなくても呼べます。
+        メールを送る仕組みがまだないので、本番では再設定を止めています（passwordResetEnabled が false）。
+        画面は、これを見て、ログインの画面に「パスワードを忘れた場合」のリンクを出すかどうかを決めます。
+      tags: [auth]
+      security: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthFeatures'
+
+  /api/auth/password-reset-requests:
+    post:
+      operationId: requestPasswordReset
+      summary: パスワードの再設定を依頼する（F-25、S-20）
+      description: |
+        パスワードを忘れた人が、メールアドレスを送って、再設定のリンクを依頼します。ログインしていなくても呼べます。
+        登録されている（削除していない）メールアドレスなら、使い捨てのトークン（32バイトの乱数）を作り、
+        再設定の画面のリンク（〜/password/reset#token=…）を、そのメールアドレスに届けます（要件定義書 5.13）。
+        トークンは URL の「#」の後ろ（フラグメント）に入れます。「#」より後ろはブラウザがサーバーへ送らないので、
+        画面を開いても、サーバーのログ・トレース・ロードバランサーの記録に残りません（Referer にも入りません）。
+        - リンクは30分だけ、1回だけ使える。もう一度依頼すると、前のリンクは使えなくなる
+        - サーバーには、トークンを SHA-256 で変換した値だけを保存する
+        - リンクの頭の URL は、設定（campfires.app-base-url）から作る。リクエストの Host ヘッダーは使わない
+
+        **登録されていても、いなくても、同じ返事（202 と同じ中身）を返します。**
+        登録されているメールアドレスを、他人に探られないようにするためです。
+        同じ IP アドレスからの依頼は、1時間に5回までです（超えると 429、RATE_LIMITED）。
+
+        メールを送る仕組みはまだないので、本番では止めています（503）。
+        開発用（dev のプロファイル）では、リンクをサーバーのログに書きます。
+
+        返す code
+        - VALIDATION_ERROR（400）：メールアドレスが空、または形が正しくない（登録されているかどうかとは関係ない）
+        - RATE_LIMITED（429）：同じ IP アドレスから、依頼しすぎた
+        - PASSWORD_RESET_UNAVAILABLE（503）：再設定を止めている（問い合わせを案内する）
+      tags: [auth]
+      security:
+        - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        '202':
+          description: 受け付けた（登録されていても、いなくても、同じ返事）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /api/auth/password-resets:
+    post:
+      operationId: resetPassword
+      summary: リンクのトークンで、パスワードを再設定する（F-25、S-21）
+      description: |
+        再設定のリンクに入っていたトークンと、新しいパスワードを送ります。ログインしていなくても呼べます。
+        トークンが使える（未使用・30分以内・アカウントが削除されていない）なら、次のことを1つのトランザクションで行います（要件定義書 5.13）。
+        - パスワードを新しくし、「変えた日時」を記録する。それより前に作られたセッション（すべての端末のログイン）は、使えなくなる
+        - そのトークン（と、まだ使っていないほかのトークン）を使用済みにする
+        - ログインの失敗の記録を消し、ロックを解く
+
+        **自動ではログインしません**（画面は、ログインの画面へ移動する）。
+        入力のチェック（400、VALIDATION_ERROR）は、止めているかどうか（503）より先に行います。
+
+        返す code
+        - VALIDATION_ERROR（400）：新しいパスワードがルールに合わない（errors に newPassword）、またはトークンが空
+        - INVALID_RESET_TOKEN（400）：トークンが使えない。知らない・期限切れ・使用済みを区別しない（どれなのかを教えないため）
+        - PASSWORD_RESET_UNAVAILABLE（503）：再設定を止めている
+      tags: [auth]
+      security:
+        - csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirmRequest'
+      responses:
+        '204':
+          description: 再設定した（ログインはしていない）
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
   # ==================== 自分のアカウント（account） ====================
 
   /api/me:
@@ -239,6 +344,41 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+
+  /api/me/password:
+    put:
+      operationId: changePassword
+      summary: パスワードを変更する（F-24、S-12）
+      description: |
+        本人の確認のため、今のパスワードと、新しいパスワードを送ります（要件定義書 5.13）。
+        - 新しいパスワードのルールは、アカウント登録と同じ（Password）。今と同じパスワードには変えられない
+        - 変えると、「変えた日時」を記録する。それより前に作られたセッション（ほかの端末のログイン）は、次の呼び出しで 401 になる
+        - 操作した端末は、ログインしたまま。ただし、セッションを作り直して、新しいセッション ID の Cookie を返す
+          （セッション固定攻撃の対策にもなる）
+        - まだ使っていない、パスワードの再設定のリンクは、使えなくなる
+
+        返す code
+        - VALIDATION_ERROR（400）：今のパスワードが空、新しいパスワードがルールに合わない、または今と同じ（errors に項目を入れる）
+        - INVALID_PASSWORD（400）：今のパスワードが違う。errors に currentPassword の項目を入れて返す
+      tags: [account]
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: 変更した。新しいセッション ID の Cookie を返す
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /api/me/events:
     get:
@@ -1506,6 +1646,63 @@ components:
           description: 今のパスワード
           example: campfire2026
 
+    ChangePasswordRequest:
+      type: object
+      description: パスワードを変えるときに送るデータ。本人の確認のため、今のパスワードも送る
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          description: 今のパスワード
+          example: campfire2026
+        newPassword:
+          $ref: '#/components/schemas/Password'
+
+    AuthFeatures:
+      type: object
+      description: ログインまわりで、今使える機能の一覧
+      required: [passwordResetEnabled]
+      properties:
+        passwordResetEnabled:
+          type: boolean
+          description: パスワードの再設定（F-25）を使えるか。メールを送る仕組みがない本番では false
+          example: false
+
+    PasswordResetRequest:
+      type: object
+      description: パスワードの再設定を依頼するときに送るデータ
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: 登録したメールアドレス（大文字と小文字は区別しない。前後の空白は取り除く）
+          example: taro@example.com
+
+    PasswordResetAccepted:
+      type: object
+      description: パスワードの再設定の依頼を受け付けたときの返事。登録されていても、いなくても、同じ中身
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: 画面に表示してよい文
+          example: 登録されているメールアドレスなら、パスワードの再設定のメールを送りました。メールのリンクから、30分以内に再設定してください。
+
+    PasswordResetConfirmRequest:
+      type: object
+      description: パスワードを再設定するときに送るデータ
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          maxLength: 100
+          description: 再設定のリンク（メール）に入っていたトークン（Base64URL の43文字）
+          example: q2v0nV8xY3Jk1mZ4c9Tb5Lw7Hs6Pe2Ua0Df3Gi8Jo1M
+        newPassword:
+          $ref: '#/components/schemas/Password'
+
     Nickname:
       type: string
       minLength: 1
@@ -2246,8 +2443,14 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    ServiceUnavailable:
+      description: 今は使えない機能（code は PASSWORD_RESET_UNAVAILABLE など）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     TooManyRequests:
-      description: 試しすぎ（code は ACCOUNT_LOCKED など）
+      description: 試しすぎ（code は ACCOUNT_LOCKED、RATE_LIMITED など）
       headers:
         Retry-After:
           description: あと何秒たてば、もう一度試せるか

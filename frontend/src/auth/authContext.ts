@@ -10,7 +10,14 @@
  */
 
 import { createContext } from 'react'
-import type { DeleteMeRequest, LoginRequest, Me, SignupRequest, UpdateMeRequest } from '../types/account'
+import type {
+  ChangePasswordRequest,
+  DeleteMeRequest,
+  LoginRequest,
+  Me,
+  SignupRequest,
+  UpdateMeRequest,
+} from '../types/account'
 
 /**
  * 【何のため】ログイン状態の形。次の3つのどれか。
@@ -37,6 +44,8 @@ export type AuthContextValue = {
   signup: (request: SignupRequest) => Promise<void>
   // ニックネームを変更する。失敗したときは ApiError を投げる
   updateMe: (request: UpdateMeRequest) => Promise<void>
+  // パスワードを変更する。この端末はログインしたまま（ほかの端末のログインは使えなくなる）。失敗したときは ApiError を投げる
+  changePassword: (request: ChangePasswordRequest) => Promise<void>
   // アカウントを削除する。成功したら、ログインしていない状態になる。失敗したときは ApiError を投げる。
   // beforeGuest は logout と同じ
   deleteAccount: (request: DeleteMeRequest, beforeGuest?: () => void | Promise<void>) => Promise<void>

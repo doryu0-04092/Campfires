@@ -1,5 +1,7 @@
 package com.campfires.account;
 
+import java.time.Instant;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -43,6 +45,15 @@ public interface UserMapper {
      * 【何のため】ニックネームを変える。
      */
     void updateNickname(@Param("id") long id, @Param("nickname") String nickname);
+
+    /**
+     * 【何のため】パスワードを変える（パスワードの変更と、パスワードの再設定で使う）。
+     * 変えた日時も記録し、それより前に作られたセッション（ほかの端末のログイン）を使えなくする（ActiveUserFilter）。
+     * @param passwordHash      新しいパスワードを BCrypt で変換した値
+     * @param passwordChangedAt 変えた日時（アプリの時計の日時。ミリ秒の単位にそろえたもの）
+     */
+    void updatePassword(@Param("id") long id, @Param("passwordHash") String passwordHash,
+            @Param("passwordChangedAt") Instant passwordChangedAt);
 
     /**
      * 【何のため】アカウントを削除した状態にする。行は残し、本名、ニックネーム、メールアドレス、パスワードを消す（要件定義書 5.5）。

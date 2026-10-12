@@ -4,6 +4,7 @@ import static com.campfires.CsrfTestSupport.csrfToken;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -79,6 +80,61 @@ class ProdProfileSessionTest {
         // 30分操作がなければ、ログアウトになる（データベースに保存したセッションにも、同じ時間が設定されている）
         assertThat(jdbcTemplate.queryForObject("SELECT max(max_inactive_interval) FROM spring_session", Integer.class))
                 .isEqualTo(1800);
+    }
+
+    /** 【何のため】アカウントを登録して、返ってきたセッションの Cookie を返す。 */
+    private Cookie signup(String email) throws Exception {
+        return mockMvc.perform(post("/api/auth/signup").with(csrfToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(Map.of("realName", "山田 太郎", "nickname", "たろう",
+                        "email", email, "password", "campfire2026", "agreedToPolicies", true))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getCookie("JSESSIONID");
+    }
+
+    /**
+     * 【何のため】本番の設定（データベースに保存したセッション）でも、パスワードを変えると、
+     * ほかの端末のセッションは使えなくなり、操作した端末は新しいセッション（新しい Cookie）で使い続けられることを確かめる。
+     * セッションを作った日時は、データベース（spring_session.creation_time）に保存されたものと比べられる。
+     */
+    @Test
+    void パスワードを変更するとほかのセッションは使えなくなる() throws Exception {
+        String email = "prod-pw-" + UUID.randomUUID() + "@example.com";
+        Cookie first = signup(email);
+        // ほかの端末でもログインする
+        Cookie other = mockMvc.perform(post("/api/auth/login").with(csrfToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(Map.of("email", email, "password", "campfire2026"))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getCookie("JSESSIONID");
+
+        // 最初の端末で、パスワードを変える。新しいセッションの Cookie が返る
+        Cookie renewed = mockMvc.perform(put("/api/me/password").cookie(first).with(csrfToken())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(jsonMapper.writeValueAsString(
+                        Map.of("currentPassword", "campfire2026", "newPassword", "new-campfire-2026"))))
+                .andExpect(status().isNoContent())
+                .andReturn().getResponse().getCookie("JSESSIONID");
+        assertThat(renewed).isNotNull();
+        assertThat(renewed.getValue()).isNotEqualTo(first.getValue());
+
+        mockMvc.perform(get("/api/me").cookie(other)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/me").cookie(first)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/me").cookie(renewed)).andExpect(status().isOk());
+    }
+
+    /**
+     * 【何のため】本番の設定では、メールを送る仕組みがないので、パスワードの再設定を止めている（503）ことを確かめる。
+     */
+    @Test
+    void 本番の設定では再設定を止めている() throws Exception {
+        mockMvc.perform(get("/api/auth/features"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.passwordResetEnabled").value(false));
+        mockMvc.perform(post("/api/auth/password-reset-requests").with(csrfToken())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"taro@example.com\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("PASSWORD_RESET_UNAVAILABLE"));
     }
 
     /**

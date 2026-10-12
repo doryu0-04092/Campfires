@@ -8,7 +8,7 @@
 import { expect, test } from '@playwright/test'
 
 import { ApiSession, json } from '../../support/api'
-import { account, sessionOf, storageStatePath } from '../../support/accounts'
+import { account, saveSession, sessionOf } from '../../support/accounts'
 
 test.describe.serial('アカウント', () => {
   // 【何のため】自分の情報（本名、メールアドレスを含む）は、本人だけが見られることを確かめる
@@ -66,7 +66,7 @@ test.describe.serial('アカウント', () => {
     expect(me.id).toBe(acc.id)
     expect((await session.get('/api/me')).status()).toBe(200)
     // あとのテスト（画面のテスト）のために、新しいログインの Cookie を保存しておく
-    await session.saveState(storageStatePath('outsider'))
+    await saveSession(session, 'outsider')
     await session.dispose()
   })
 
