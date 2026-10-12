@@ -4,3 +4,5 @@ node_modules/
 .auth*/
 test-results/
 playwright-report/
+# デモ動画の録画の出力（e2e/demo/README.md）
+demo-output/

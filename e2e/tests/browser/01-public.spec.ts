@@ -73,8 +73,9 @@ test('コミュニティ一覧で検索して、コミュニティ詳細を開�
   await expect(page.getByRole('heading', { name: communityName, level: 1 })).toBeVisible()
   await expect(main(page).getByText('だれでも見られるコミュニティの説明です。')).toBeVisible()
   await expect(main(page).getByText(`オーナー：${account('owner').nickname}`)).toBeVisible()
-  // ログインしていないので、参加の申請の代わりに、ログインへの案内が出る
-  await expect(main(page).getByText('参加を申請するには、')).toBeVisible()
+  // ログインしていないので、「参加を申請する」は、ログインの画面へのリンクになる（ボタンではない）
+  await expect(main(page).getByText('参加を申請するには、ログインが必要です。')).toBeVisible()
+  await expect(main(page).getByRole('link', { name: '参加を申請する' })).toHaveAttribute('href', '/login')
   await expect(main(page).getByRole('button', { name: '参加を申請する' })).toHaveCount(0)
   // 管理の画面へのリンクは出ない
   await expect(main(page).getByRole('link', { name: 'メンバー管理' })).toHaveCount(0)
@@ -90,8 +91,9 @@ test('ログインしていなくても、イベント詳細を見られる', as
   await expect(main(page).getByRole('link', { name: communityName })).toBeVisible()
   await expect(main(page).getByText('E2E 公民館')).toBeVisible()
   await expect(main(page).getByText('7人（残り 7人）')).toBeVisible()
-  // 申し込むボタンは出ず、ログインへの案内が出る
-  await expect(main(page).getByText('申し込むには、')).toBeVisible()
+  // 「申し込む」は、ログインの画面へのリンクになる（押すとログインの画面へ。ログインのあと、ここに戻る）
+  await expect(main(page).getByText('申し込むには、ログインが必要です。')).toBeVisible()
+  await expect(main(page).getByRole('link', { name: '申し込む' })).toHaveAttribute('href', '/login')
   await expect(main(page).getByRole('button', { name: '申し込む' })).toHaveCount(0)
 })
 

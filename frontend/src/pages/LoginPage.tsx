@@ -7,7 +7,7 @@
  */
 
 import { useState, type FormEvent } from 'react'
-import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { fetchAuthFeatures } from '../api/auth'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/useAuth'
@@ -16,6 +16,7 @@ import PasswordField from '../components/PasswordField'
 import formStyles from '../components/Form.module.css'
 import { toFieldMessages } from '../utils/fieldErrors'
 import { useLoader } from '../utils/useLoader'
+import { returnToPath, returnToState } from '../utils/returnTo'
 import styles from './LoginPage.module.css'
 
 /**
@@ -25,9 +26,9 @@ function LoginPage() {
   const { state, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  // ログインが必要な画面（RequireAuth）から来た場合は、その場所が state.from に入っている。
-  // as は「この形だと信じて扱う」という書き方。来た場所がなければトップ（/）に戻る
-  const from = (location.state as { from?: Location } | null)?.from?.pathname ?? '/'
+  // 元の画面（ログインが必要な画面、「申し込む」を押した画面、上の「ログイン」を押したときの画面）が state.from に入っている。
+  // ログインのあとは、その画面に戻る（検索の言葉も残す）。来た場所がなければトップ（/）に戻る（utils/returnTo.ts）
+  const from = returnToPath(location)
   // ほかの画面から渡された知らせ（例：パスワードの再設定の画面から「再設定しました」）
   const notice = (location.state as { notice?: string } | null)?.notice
   // 今使える機能の一覧。読み込めなかったときは、リンクを出さない（「お問い合わせください」の案内を出す）
@@ -126,7 +127,7 @@ function LoginPage() {
       </form>
 
       <p className={formStyles.note}>
-        アカウントをお持ちでない方は <Link to="/signup">アカウント登録</Link>
+        アカウントをお持ちでない方は <Link to="/signup" state={returnToState(location)}>アカウント登録</Link>
       </p>
       {/* パスワードの再設定を使えるときはリンクを、使えないとき（メールを送る仕組みがない本番など）は案内を出す */}
       {features?.passwordResetEnabled ? (

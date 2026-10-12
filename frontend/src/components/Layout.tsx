@@ -16,6 +16,7 @@ import { fetchUnreadCount } from '../api/notifications'
 // ログイン状態と、ログアウトの操作を読み出す
 import { useAuth } from '../auth/useAuth'
 import { useLoader } from '../utils/useLoader'
+import { returnToState } from '../utils/returnTo'
 import type { LayoutContext } from './layoutContext'
 // 左側のメニュー（ユーザー・コミュニティ管理）
 import Sidebar from './Sidebar'
@@ -84,6 +85,8 @@ function Layout() {
 function HeaderMenu({ unreadCount }: { unreadCount: number }) {
   const { state, logout } = useAuth()
   const navigate = useNavigate()
+  // 今の画面の場所（ログイン・登録のあとに、ここへ戻ってくるため）
+  const location = useLocation()
   // ログアウトの途中かどうか。途中はボタンを押せないようにして、二重に押されるのを防ぐ
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
@@ -113,8 +116,9 @@ function HeaderMenu({ unreadCount }: { unreadCount: number }) {
     return (
       // メニューのリンクを横に並べる。見た目は menuButton でボタン型にそろえる
       <nav className={styles.nav}>
-        <Link to="/login" className={styles.menuButton}>ログイン</Link>
-        <Link to="/signup" className={styles.menuButton}>アカウント登録</Link>
+        {/* state：今の画面を渡し、ログイン・登録のあとに、この画面に戻ってくる（utils/returnTo.ts） */}
+        <Link to="/login" state={returnToState(location)} className={styles.menuButton}>ログイン</Link>
+        <Link to="/signup" state={returnToState(location)} className={styles.menuButton}>アカウント登録</Link>
       </nav>
     )
   }

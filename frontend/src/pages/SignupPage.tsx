@@ -6,13 +6,14 @@
  */
 
 import { useState, type FormEvent } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import FormField from '../components/FormField'
 import PasswordField from '../components/PasswordField'
 import formStyles from '../components/Form.module.css'
 import { toFieldMessages } from '../utils/fieldErrors'
+import { returnToPath, returnToState } from '../utils/returnTo'
 
 /**
  * 【何のため】アカウント登録の画面を表示する。
@@ -20,6 +21,9 @@ import { toFieldMessages } from '../utils/fieldErrors'
 function SignupPage() {
   const { state, signup } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  // 登録のあとに戻る画面（「申し込む」や上の「アカウント登録」を押したときの画面。なければトップ）
+  const from = returnToPath(location)
 
   // 入力中の値
   const [realName, setRealName] = useState('')
@@ -33,9 +37,9 @@ function SignupPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldMessages, setFieldMessages] = useState<Record<string, string>>({})
 
-  // すでにログインしているときは、登録の画面は不要なので、トップの画面に移動する
+  // すでにログインしているときは、登録の画面は不要なので、元の画面に移動する
   if (state.status === 'authenticated') {
-    return <Navigate to="/" replace />
+    return <Navigate to={from} replace />
   }
 
   /**
@@ -50,7 +54,7 @@ function SignupPage() {
     try {
       await signup({ realName, nickname, email, password, agreedToPolicies: agreed })
       // 成功したら、ログインした状態でトップの画面へ移動する
-      navigate('/', { replace: true })
+      navigate(from, { replace: true })
     } catch (error) {
       if (!(error instanceof ApiError)) {
         setFormError('通信中にエラーが発生しました。時間をおいて、もう一度お試しください。')
@@ -145,7 +149,7 @@ function SignupPage() {
       </form>
 
       <p className={formStyles.note}>
-        すでにアカウントをお持ちの方は <Link to="/login">ログイン</Link>
+        すでにアカウントをお持ちの方は <Link to="/login" state={returnToState(location)}>ログイン</Link>
       </p>
     </section>
   )

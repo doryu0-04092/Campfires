@@ -16,6 +16,7 @@ import { applyToEvent, cancelMyApplication, fetchEvent } from '../api/events'
 import { useAuth } from '../auth/useAuth'
 import formStyles from '../components/Form.module.css'
 import styles from '../components/List.module.css'
+import { returnToState } from '../utils/returnTo'
 import LoadError from '../components/LoadError'
 import { APPROVAL_LABELS, type EventDetail, type MyApplication } from '../types/event'
 import { formatDateTime } from '../utils/formatDateTime'
@@ -163,12 +164,22 @@ function ApplicationActions({ event, isFull, onChanged }: { event: EventDetail; 
   }
 
   let content
-  if (state.status !== 'authenticated') {
-    // ログインしていない：ログインを案内する。ログインしたら、この画面に戻ってくる
+  if (state.status !== 'authenticated' && isDeadlinePassed) {
+    content = <p className={styles.message}>申込みの締め切りを過ぎています。</p>
+  } else if (state.status !== 'authenticated') {
+    // ログインしていない：「申し込む」を押すと、ログインの画面に移る。ログインのあと、この画面に戻ってくる（utils/returnTo.ts）
     content = (
-      <p className={styles.message}>
-        申し込むには、<Link to="/login" state={{ from: location }}>ログイン</Link>してください。
-      </p>
+      <>
+        <p className={styles.message}>申し込むには、ログインが必要です。ログインのあと、この画面に戻ります。</p>
+        <div className={styles.actions}>
+          <Link to="/login" state={returnToState(location)} className={`${styles.button} ${styles.buttonPrimary}`}>
+            申し込む
+          </Link>
+          <Link to="/signup" state={returnToState(location)} className={styles.button}>
+            アカウント登録
+          </Link>
+        </div>
+      </>
     )
   } else if (event.myApplication?.status === 'rejected') {
     // 却下された：申し込み直せない（要件定義書 5.12）

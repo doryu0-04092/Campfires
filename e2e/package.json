@@ -10,7 +10,8 @@
     "test:mobile": "playwright test --project=mobile",
     "test:a11y": "playwright test --project=a11y",
     "install:browsers": "playwright install firefox webkit",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "demo:record": "node demo/record.mjs demo-output"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
