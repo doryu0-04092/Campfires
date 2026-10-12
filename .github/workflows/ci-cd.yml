@@ -197,6 +197,11 @@ jobs:
           bash infra/scripts/deploy.sh "$SERVICE_ARN" "$IMAGE"
           ENDPOINT=$(aws ecs describe-express-gateway-service --service-arn "$SERVICE_ARN" \
             --query 'service.activeConfigurations[0].ingressPaths[0].endpoint' --output text)
+          # AWS の API が返す URL には https:// が付いていない（ca-….on.aws の形）。付いていなければ付ける
+          case "$ENDPOINT" in
+            https://*) ;;
+            *) ENDPOINT="https://$ENDPOINT" ;;
+          esac
           echo "ENDPOINT=$ENDPOINT" >> "$GITHUB_ENV"
       - name: ロードバランサーの守りの設定が効いていることを確かめる（読むだけ）
         run: |
